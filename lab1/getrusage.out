@@ -1,0 +1,9 @@
+User CPU time (utime): 0.001207 seconds
+System CPU time (stime): 0.000000 seconds
+Max resident set size (maxrss): 3088 KB
+Page reclaims (minflt): 104
+Page faults (majflt): 0
+Block input operations (inblock): 0
+Block output operations (oublock): 0
+Voluntary context switches (nvcsw): 0
+Involuntary context switches (nivcsw): 0
