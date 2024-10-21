@@ -1,0 +1,88 @@
+   cache and TLB information (2):
+      0x5a: data TLB: 2M/4M pages, 4-way, 32 entries
+      0x03: data TLB: 4K pages, 4-way, 64 entries
+      0x55: instruction TLB: 2M/4M pages, fully, 7 entries
+      0xb2: instruction TLB: 4K, 4-way, 64 entries
+      0xca: L2 TLB: 4K pages, 4-way, 512 entries
+   L1 TLB/cache information: 2M/4M pages & L1 TLB (0x80000005/eax):
+   L1 TLB/cache information: 4K pages & L1 TLB (0x80000005/ebx):
+   L2 TLB/cache information: 2M/4M pages & L2 TLB (0x80000006/eax):
+   L2 TLB/cache information: 4K pages & L2 TLB (0x80000006/ebx):
+      INVLPGB supports TLB flush guest nested  = false
+   cache and TLB information (2):
+      0x5a: data TLB: 2M/4M pages, 4-way, 32 entries
+      0x03: data TLB: 4K pages, 4-way, 64 entries
+      0x55: instruction TLB: 2M/4M pages, fully, 7 entries
+      0xb2: instruction TLB: 4K, 4-way, 64 entries
+      0xca: L2 TLB: 4K pages, 4-way, 512 entries
+   L1 TLB/cache information: 2M/4M pages & L1 TLB (0x80000005/eax):
+   L1 TLB/cache information: 4K pages & L1 TLB (0x80000005/ebx):
+   L2 TLB/cache information: 2M/4M pages & L2 TLB (0x80000006/eax):
+   L2 TLB/cache information: 4K pages & L2 TLB (0x80000006/ebx):
+      INVLPGB supports TLB flush guest nested  = false
+   cache and TLB information (2):
+      0x5a: data TLB: 2M/4M pages, 4-way, 32 entries
+      0x03: data TLB: 4K pages, 4-way, 64 entries
+      0x55: instruction TLB: 2M/4M pages, fully, 7 entries
+      0xb2: instruction TLB: 4K, 4-way, 64 entries
+      0xca: L2 TLB: 4K pages, 4-way, 512 entries
+   L1 TLB/cache information: 2M/4M pages & L1 TLB (0x80000005/eax):
+   L1 TLB/cache information: 4K pages & L1 TLB (0x80000005/ebx):
+   L2 TLB/cache information: 2M/4M pages & L2 TLB (0x80000006/eax):
+   L2 TLB/cache information: 4K pages & L2 TLB (0x80000006/ebx):
+      INVLPGB supports TLB flush guest nested  = false
+   cache and TLB information (2):
+      0x5a: data TLB: 2M/4M pages, 4-way, 32 entries
+      0x03: data TLB: 4K pages, 4-way, 64 entries
+      0x55: instruction TLB: 2M/4M pages, fully, 7 entries
+      0xb2: instruction TLB: 4K, 4-way, 64 entries
+      0xca: L2 TLB: 4K pages, 4-way, 512 entries
+   L1 TLB/cache information: 2M/4M pages & L1 TLB (0x80000005/eax):
+   L1 TLB/cache information: 4K pages & L1 TLB (0x80000005/ebx):
+   L2 TLB/cache information: 2M/4M pages & L2 TLB (0x80000006/eax):
+   L2 TLB/cache information: 4K pages & L2 TLB (0x80000006/ebx):
+      INVLPGB supports TLB flush guest nested  = false
+   cache and TLB information (2):
+      0x5a: data TLB: 2M/4M pages, 4-way, 32 entries
+      0x03: data TLB: 4K pages, 4-way, 64 entries
+      0x55: instruction TLB: 2M/4M pages, fully, 7 entries
+      0xb2: instruction TLB: 4K, 4-way, 64 entries
+      0xca: L2 TLB: 4K pages, 4-way, 512 entries
+   L1 TLB/cache information: 2M/4M pages & L1 TLB (0x80000005/eax):
+   L1 TLB/cache information: 4K pages & L1 TLB (0x80000005/ebx):
+   L2 TLB/cache information: 2M/4M pages & L2 TLB (0x80000006/eax):
+   L2 TLB/cache information: 4K pages & L2 TLB (0x80000006/ebx):
+      INVLPGB supports TLB flush guest nested  = false
+   cache and TLB information (2):
+      0x5a: data TLB: 2M/4M pages, 4-way, 32 entries
+      0x03: data TLB: 4K pages, 4-way, 64 entries
+      0x55: instruction TLB: 2M/4M pages, fully, 7 entries
+      0xb2: instruction TLB: 4K, 4-way, 64 entries
+      0xca: L2 TLB: 4K pages, 4-way, 512 entries
+   L1 TLB/cache information: 2M/4M pages & L1 TLB (0x80000005/eax):
+   L1 TLB/cache information: 4K pages & L1 TLB (0x80000005/ebx):
+   L2 TLB/cache information: 2M/4M pages & L2 TLB (0x80000006/eax):
+   L2 TLB/cache information: 4K pages & L2 TLB (0x80000006/ebx):
+      INVLPGB supports TLB flush guest nested  = false
+   cache and TLB information (2):
+      0x5a: data TLB: 2M/4M pages, 4-way, 32 entries
+      0x03: data TLB: 4K pages, 4-way, 64 entries
+      0x55: instruction TLB: 2M/4M pages, fully, 7 entries
+      0xb2: instruction TLB: 4K, 4-way, 64 entries
+      0xca: L2 TLB: 4K pages, 4-way, 512 entries
+   L1 TLB/cache information: 2M/4M pages & L1 TLB (0x80000005/eax):
+   L1 TLB/cache information: 4K pages & L1 TLB (0x80000005/ebx):
+   L2 TLB/cache information: 2M/4M pages & L2 TLB (0x80000006/eax):
+   L2 TLB/cache information: 4K pages & L2 TLB (0x80000006/ebx):
+      INVLPGB supports TLB flush guest nested  = false
+   cache and TLB information (2):
+      0x5a: data TLB: 2M/4M pages, 4-way, 32 entries
+      0x03: data TLB: 4K pages, 4-way, 64 entries
+      0x55: instruction TLB: 2M/4M pages, fully, 7 entries
+      0xb2: instruction TLB: 4K, 4-way, 64 entries
+      0xca: L2 TLB: 4K pages, 4-way, 512 entries
+   L1 TLB/cache information: 2M/4M pages & L1 TLB (0x80000005/eax):
+   L1 TLB/cache information: 4K pages & L1 TLB (0x80000005/ebx):
+   L2 TLB/cache information: 2M/4M pages & L2 TLB (0x80000006/eax):
+   L2 TLB/cache information: 4K pages & L2 TLB (0x80000006/ebx):
+      INVLPGB supports TLB flush guest nested  = false

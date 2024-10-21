@@ -1,0 +1,24 @@
+56340a0d2000-56340a0d3000 r--p 00000000 08:03 4006773                    /users/ytchang/Fa24_AdvancedOS/lab1/mmap
+56340a0d3000-56340a0d4000 r-xp 00001000 08:03 4006773                    /users/ytchang/Fa24_AdvancedOS/lab1/mmap
+56340a0d4000-56340a0d5000 r--p 00002000 08:03 4006773                    /users/ytchang/Fa24_AdvancedOS/lab1/mmap
+56340a0d5000-56340a0d6000 r--p 00002000 08:03 4006773                    /users/ytchang/Fa24_AdvancedOS/lab1/mmap
+56340a0d6000-56340a0d7000 rw-p 00003000 08:03 4006773                    /users/ytchang/Fa24_AdvancedOS/lab1/mmap
+56340b073000-56340b094000 rw-p 00000000 00:00 0                          [heap]
+7f1d8f4c9000-7f1d8f4cc000 rw-p 00000000 00:00 0 
+7f1d8f4cc000-7f1d8f4f4000 r--p 00000000 08:03 246286                     /usr/lib/x86_64-linux-gnu/libc.so.6
+7f1d8f4f4000-7f1d8f689000 r-xp 00028000 08:03 246286                     /usr/lib/x86_64-linux-gnu/libc.so.6
+7f1d8f689000-7f1d8f6e1000 r--p 001bd000 08:03 246286                     /usr/lib/x86_64-linux-gnu/libc.so.6
+7f1d8f6e1000-7f1d8f6e2000 ---p 00215000 08:03 246286                     /usr/lib/x86_64-linux-gnu/libc.so.6
+7f1d8f6e2000-7f1d8f6e6000 r--p 00215000 08:03 246286                     /usr/lib/x86_64-linux-gnu/libc.so.6
+7f1d8f6e6000-7f1d8f6e8000 rw-p 00219000 08:03 246286                     /usr/lib/x86_64-linux-gnu/libc.so.6
+7f1d8f6e8000-7f1d8f6f5000 rw-p 00000000 00:00 0 
+7f1d8f6fb000-7f1d8f6fd000 rw-p 00000000 00:00 0 
+7f1d8f6fd000-7f1d8f6ff000 r--p 00000000 08:03 246283                     /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+7f1d8f6ff000-7f1d8f729000 r-xp 00002000 08:03 246283                     /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+7f1d8f729000-7f1d8f734000 r--p 0002c000 08:03 246283                     /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+7f1d8f735000-7f1d8f737000 r--p 00037000 08:03 246283                     /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+7f1d8f737000-7f1d8f739000 rw-p 00039000 08:03 246283                     /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+7fff116b3000-7fff116d4000 rw-p 00000000 00:00 0                          [stack]
+7fff11772000-7fff11776000 r--p 00000000 00:00 0                          [vvar]
+7fff11776000-7fff11778000 r-xp 00000000 00:00 0                          [vdso]
+ffffffffff600000-ffffffffff601000 --xp 00000000 00:00 0                  [vsyscall]
