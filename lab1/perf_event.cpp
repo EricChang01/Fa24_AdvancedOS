@@ -3,6 +3,8 @@
 #include <sys/ioctl.h>
 #include <sys/resource.h>
 #include <sys/time.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +13,7 @@
 #include <iostream>
 
 #define CACHE_LINE_SIZE 64
+#define FILE_PATH "file.dat"
 bool opt_random_access;
 
 // Simple, fast random number generator, here so we can observe it using profiler
@@ -79,14 +82,10 @@ void flush_L1_cache() {
 }
 
 int main(int argc, char* argv[]){
-    opt_random_access = argv[1]; // Set up opt_random_access with argument
-
-    size_t bufferSize = 1024 * 1024 * 1024; // 1GB
-    char* buffer = new char[bufferSize];
-    if (buffer == nullptr) {
-        std::cerr << "Memory allocation failed!" << std::endl;
-        return 1;
-    }
+    opt_random_access = atoi(argv[1]); // Set up opt_random_access with argument
+    int file_based_mmap = atoi(argv[2]); // map anonymous or file-backed memory
+    int mmap_flag = atoi(argv[3]); // MAP_PRIVATE, MAP_SHARED or MAP_POPULATE
+    int opt_memset_msync = atoi(argv[4]);
 
     struct perf_event_attr l1d_access, l1d_miss, dtlb_miss;
     memset(&l1d_access, 0, sizeof(struct perf_event_attr));
@@ -150,28 +149,41 @@ int main(int argc, char* argv[]){
     }
 
     // add the code to monitor, allocate a 1GB buffer
-    do_mem_access(buffer, 1<<30);
+    size_t bufferSize = 1024 * 1024 * 1024; // 1GB
+    
+    void* buffer;
+    int mmap_fd;
+    switch (file_based_mmap){
+        case 0: // anonymous
+            buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+            break;
+        case 1:
+            mmap_fd = open(FILE_PATH, O_RDWR);
+            switch (mmap_flag){
+                case 0: // MAP_PRIVATE
+                    buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_PRIVATE, mmap_fd, 0);
+                    break;
+                case 1: // MAP_SHARED
+                    buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_SHARED, mmap_fd, 0);
+                    break;
+                case 2: // MAP_POPULATE
+                    buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_POPULATE, mmap_fd, 0);
+                    break;
+                default:
+                    fprintf(stderr, "Invalid mmap flag\n");
+                    exit(1);
+            }
+            break;
+        default:
+            fprintf(stderr, "Invalid mmap type\n");
+            exit(1);
+
+    }
+    do_mem_access((char*)buffer, 1<<30);
 
     ioctl(l1d_access_fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
     ioctl(l1d_miss_fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
     ioctl(dtlb_miss_fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
-
-    if (getrusage(RUSAGE_SELF, &usage_end) == 0) {
-        // Print specific fields from the rusage struct
-        printf("User CPU time (utime): %ld.%06ld / %ld.%06ld seconds\n",
-               (long)usage_start.ru_utime.tv_sec, (long)usage_start.ru_utime.tv_usec, (long)usage_end.ru_utime.tv_sec, (long)usage_end.ru_utime.tv_usec);
-        printf("System CPU time (stime): %ld.%06ld / %ld.%06ld seconds\n",
-               (long)usage_start.ru_stime.tv_sec, (long)usage_start.ru_stime.tv_usec, (long)usage_end.ru_stime.tv_sec, (long)usage_end.ru_stime.tv_usec);
-        printf("Max resident set size (maxrss): %ld KB\n", usage_start.ru_maxrss);
-        printf("Page reclaims (minflt): %ld\n", usage_end.ru_minflt - usage_start.ru_minflt);
-        printf("Page faults (majflt): %ld\n", usage_end.ru_majflt - usage_start.ru_majflt);
-        printf("Block input operations (inblock): %ld\n", usage_end.ru_inblock - usage_start.ru_inblock);
-        printf("Block output operations (oublock): %ld\n", usage_end.ru_oublock - usage_start.ru_oublock);
-        printf("Voluntary context switches (nvcsw): %ld\n", usage_end.ru_nvcsw - usage_start.ru_nvcsw);
-        printf("Involuntary context switches (nivcsw): %ld\n", usage_end.ru_nivcsw - usage_start.ru_nivcsw);
-    } else {
-        perror("getrusage");
-    }
 
     long long count_l1d_access, count_l1d_miss, count_dtlb_miss;
     read(l1d_access_fd, &count_l1d_access, sizeof(long long)); // Read the event count
@@ -181,6 +193,23 @@ int main(int argc, char* argv[]){
     printf("l1d access count: %lld\n", count_l1d_access);
     printf("l1d misses count: %lld\n", count_l1d_miss);
     printf("dtlb misses count: %lld\n", count_dtlb_miss);
+
+    if (getrusage(RUSAGE_SELF, &usage_end) == 0) {
+        // Print specific fields from the rusage struct
+        printf("User CPU time (utime) in seconds: %f\n",
+               ((double)usage_end.ru_utime.tv_sec + (double)usage_end.ru_utime.tv_usec / 1000000) - ((double)usage_start.ru_utime.tv_sec + (double)usage_start.ru_utime.tv_usec / 1000000));
+        printf("System CPU time (stime) in seconds: %f\n",
+               ((double)usage_end.ru_stime.tv_sec + (double)usage_end.ru_stime.tv_usec / 1000000) - ((double)usage_start.ru_stime.tv_sec + (double)usage_start.ru_stime.tv_usec / 1000000));
+        printf("Max resident set size (maxrss) in KB: %ld\n", usage_start.ru_maxrss);
+        printf("Page reclaims (minflt): %ld\n", usage_end.ru_minflt - usage_start.ru_minflt);
+        printf("Page faults (majflt): %ld\n", usage_end.ru_majflt - usage_start.ru_majflt);
+        printf("Block input operations (inblock): %ld\n", usage_end.ru_inblock - usage_start.ru_inblock);
+        printf("Block output operations (oublock): %ld\n", usage_end.ru_oublock - usage_start.ru_oublock);
+        printf("Voluntary context switches (nvcsw): %ld\n", usage_end.ru_nvcsw - usage_start.ru_nvcsw);
+        printf("Involuntary context switches (nivcsw): %ld\n", usage_end.ru_nivcsw - usage_start.ru_nivcsw);
+    } else {
+        perror("getrusage");
+    }
     
     close(l1d_access_fd);
     close(l1d_miss_fd);
