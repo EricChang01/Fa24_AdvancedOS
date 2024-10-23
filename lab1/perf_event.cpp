@@ -56,8 +56,28 @@ void do_mem_access(char* p, int size) {
     }
 }
 
+void flush_L1_cache() {
+    // L1 cache size is 512KB, allocate a buffer larger than this
+    size_t cache_size = 512 * 1024;  // 64 KB buffer
+    char *buffer = (char*)malloc(cache_size);
+    
+    // Write to the buffer to flush the cache (a simple write will force write-allocate on many CPUs)
+    for (size_t i = 0; i < cache_size; i++) {
+        buffer[i] = 0;
+    }
+
+    // Optional: read from the buffer to flush the cache via reads (depending on the CPU)
+    for (size_t i = 0; i < cache_size; i++) {
+        volatile char temp = buffer[i];
+        (void)temp;  // Prevent compiler optimizations
+    }
+
+    free(buffer);  // Free allocated buffer after flushing
+}
+
 int main(int argc, char* argv[]){
     opt_random_access = argv[1]; // Set up opt_random_access with argument
+    std::cout << argv[1] << "\n";
 
     size_t bufferSize = 1024 * 1024 * 1024; // 1GB
     char* buffer = new char[bufferSize];
@@ -66,42 +86,78 @@ int main(int argc, char* argv[]){
         return 1;
     }
 
-    struct perf_event_attr pe; // Initialize the perf event
-    memset(&pe, 0, sizeof(struct perf_event_attr));
+    struct perf_event_attr l1d_access, l1d_miss, dtlb_miss;
+    memset(&l1d_access, 0, sizeof(struct perf_event_attr));
+    memset(&l1d_miss, 0, sizeof(struct perf_event_attr));
+    memset(&dtlb_miss, 0, sizeof(struct perf_event_attr));
 
+    l1d_access.type = PERF_TYPE_HW_CACHE;
+    l1d_access.size = sizeof(struct perf_event_attr);
+    l1d_access.config = (PERF_COUNT_HW_CACHE_L1D | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16));
+    l1d_access.disabled = 1;
+    l1d_access.exclude_kernel = 1; // only monitor user space
+    l1d_access.exclude_hv = 1;     // exclude hypervisor
 
-    // pe.type = PERF_TYPE_HARDWARE;   // Type of event (hardware, software, etc.)
-    // pe.size = sizeof(struct perf_event_attr);
-    // pe.config = PERF_COUNT_HW_CPU_CYCLES; // Specific event (CPU cycles, instructions, etc.)
-    // pe.disabled = 1;               // Start disabled (we enable it later)
-    // pe.exclude_kernel = 1;         // Don't count kernel events
-    // pe.exclude_hv = 1;             // Don't count hypervisor events
+    l1d_miss.type = PERF_TYPE_HW_CACHE;
+    l1d_miss.size = sizeof(struct perf_event_attr);
+    l1d_miss.config = (PERF_COUNT_HW_CACHE_L1D | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
+    l1d_miss.disabled = 1;
+    l1d_miss.exclude_kernel = 1; // only monitor user space
+    l1d_miss.exclude_hv = 1;     // exclude hypervisor
 
-    pe.type = PERF_TYPE_HW_CACHE;
-    pe.size = sizeof(struct perf_event_attr);
-    pe.config = (PERF_COUNT_HW_CACHE_L1D | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16));
-    pe.disabled = 1;
-    pe.exclude_kernel = 1; // only monitor user space
-    pe.exclude_hv = 1;     // exclude hypervisor
+    dtlb_miss.type = PERF_TYPE_HW_CACHE;
+    dtlb_miss.size = sizeof(struct perf_event_attr);
+    dtlb_miss.config = (PERF_COUNT_HW_CACHE_DTLB | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
+    dtlb_miss.disabled = 1;
+    dtlb_miss.exclude_kernel = 1; // only monitor user space
+    dtlb_miss.exclude_hv = 1;     // exclude hypervisor
 
-    int fd = syscall(__NR_perf_event_open, &pe, getpid(), -1, -1, 0);
-    // int fd = perf_event_open(&pe, getpid(), -1, -1, 0);
-    if (fd == -1) {
-        fprintf(stderr, "Error opening leader %llx\n", pe.config);
+    int l1d_access_fd = syscall(__NR_perf_event_open, &l1d_access, 0, -1, -1, 0);
+    if (l1d_access_fd == -1) {
+        fprintf(stderr, "Error opening lid access %llx, %s\n", l1d_access.config, strerror(errno));
         return -1;
     }
 
-    ioctl(fd, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
-    ioctl(fd, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
+    int l1d_miss_fd = syscall(__NR_perf_event_open, &l1d_miss, 0, -1, -1, 0);
+    if (l1d_miss_fd == -1) {
+        fprintf(stderr, "Error opening lid miss %llx, %s\n", l1d_miss.config, strerror(errno));
+        return -1;
+    }
 
-    // add the code to monitor
+    int dtlb_miss_fd = syscall(__NR_perf_event_open, &dtlb_miss, 0, -1, -1, 0);
+    if (dtlb_miss_fd == -1) {
+        fprintf(stderr, "Error opening lid miss %llx, %s\n", dtlb_miss.config, strerror(errno));
+        return -1;
+    }
+
+    flush_L1_cache();
+
+    ioctl(l1d_access_fd, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
+    ioctl(l1d_access_fd, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
+
+    ioctl(l1d_miss_fd, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
+    ioctl(l1d_miss_fd, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
+
+    ioctl(dtlb_miss_fd, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
+    ioctl(dtlb_miss_fd, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
+
+    // add the code to monitor, allocate a 1GB buffer
     do_mem_access(buffer, 1<<30);
 
-    ioctl(fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
+    ioctl(l1d_access_fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
+    ioctl(l1d_miss_fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
+    ioctl(dtlb_miss_fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
 
-    long long count;
-    read(fd, &count, sizeof(long long)); // Read the event count
+    long long count_l1d_access, count_l1d_miss, count_dtlb_miss;
+    read(l1d_access_fd, &count_l1d_access, sizeof(long long)); // Read the event count
+    read(l1d_miss_fd, &count_l1d_miss, sizeof(long long)); // Read the event count
+    read(dtlb_miss_fd, &count_dtlb_miss, sizeof(long long)); // Read the event count
 
-    printf("CPU cycles: %lld\n", count);
-    close(fd);
+    printf("l1d access count: %lld\n", count_l1d_access);
+    printf("l1d misses count: %lld\n", count_l1d_miss);
+    printf("dtlb misses count: %lld\n", count_dtlb_miss);
+    
+    close(l1d_access_fd);
+    close(l1d_miss_fd);
+    close(dtlb_miss_fd);
 }
