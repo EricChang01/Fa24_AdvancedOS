@@ -1,0 +1,133 @@
+opt_random_access = 0
+1.
+User CPU time (utime): 0.003853 / 23.117664 seconds (23.113811)
+System CPU time (stime): 0.000000 / 0.736052 seconds (0.736052)
+Max resident set size (maxrss): 3024 KB
+Page reclaims (minflt): 466808
+Page faults (majflt): 0
+Block input operations (inblock): 0
+Block output operations (oublock): 0
+Voluntary context switches (nvcsw): 0
+Involuntary context switches (nivcsw): 96
+l1d access count: 45088939250
+l1d misses count: 485591488
+dtlb misses count: 2355910
+2.
+User CPU time (utime): 0.003878 / 22.839967 seconds (22.836889)
+System CPU time (stime): 0.000000 / 0.779998 seconds (0.779998)
+Max resident set size (maxrss): 3084 KB
+Page reclaims (minflt): 466402
+Page faults (majflt): 0
+Block input operations (inblock): 0
+Block output operations (oublock): 0
+Voluntary context switches (nvcsw): 0
+Involuntary context switches (nivcsw): 95
+l1d access count: 45146614391
+l1d misses count: 480584860
+dtlb misses count: 2354612
+3.
+User CPU time (utime): 0.004163 / 23.213831 seconds (23.209668)
+System CPU time (stime): 0.000000 / 0.836065 seconds (0.836065)
+Max resident set size (maxrss): 3200 KB
+Page reclaims (minflt): 466402
+Page faults (majflt): 0
+Block input operations (inblock): 0
+Block output operations (oublock): 0
+Voluntary context switches (nvcsw): 0
+Involuntary context switches (nivcsw): 98
+l1d access count: 45150938821
+l1d misses count: 473341821
+dtlb misses count: 2360076
+4.
+User CPU time (utime): 0.004163 / 23.213831 seconds (23.209668)
+System CPU time (stime): 0.000000 / 0.836065 seconds (0.836065)
+Max resident set size (maxrss): 3200 KB
+Page reclaims (minflt): 466402
+Page faults (majflt): 0
+Block input operations (inblock): 0
+Block output operations (oublock): 0
+Voluntary context switches (nvcsw): 0
+Involuntary context switches (nivcsw): 98
+l1d access count: 45150938821
+l1d misses count: 473341821
+dtlb misses count: 2360076
+5.
+User CPU time (utime): 0.003337 / 22.803178 seconds (22.799841)
+System CPU time (stime): 0.000000 / 0.803971 seconds (0.803971)
+Max resident set size (maxrss): 3112 KB
+Page reclaims (minflt): 466402
+Page faults (majflt): 0
+Block input operations (inblock): 0
+Block output operations (oublock): 0
+Voluntary context switches (nvcsw): 0
+Involuntary context switches (nivcsw): 102
+l1d access count: 45129475915
+l1d misses count: 484471196
+dtlb misses count: 2360538
+
+opt_random_access = 1
+1.
+User CPU time (utime): 0.003834 / 22.844823 seconds (22.840989)
+System CPU time (stime): 0.000000 / 0.620022 seconds (0.620022)
+Max resident set size (maxrss): 3032 KB
+Page reclaims (minflt): 466824
+Page faults (majflt): 0
+Block input operations (inblock): 0
+Block output operations (oublock): 0
+Voluntary context switches (nvcsw): 0
+Involuntary context switches (nivcsw): 101
+l1d access count: 45105212191
+l1d misses count: 433169133
+dtlb misses count: 2356555
+2.
+User CPU time (utime): 0.000000 / 23.565002 seconds (23.565002)
+System CPU time (stime): 0.003958 / 0.955878 seconds (0.955878)
+Max resident set size (maxrss): 3112 KB
+Page reclaims (minflt): 466402
+Page faults (majflt): 0
+Block input operations (inblock): 0
+Block output operations (oublock): 0
+Voluntary context switches (nvcsw): 0
+Involuntary context switches (nivcsw): 113
+l1d access count: 45134884494
+l1d misses count: 475121644
+dtlb misses count: 2351684
+3.
+User CPU time (utime): 0.003897 / 23.539781 seconds (23.535884)
+System CPU time (stime): 0.000000 / 0.835992 seconds (0.835992)
+Max resident set size (maxrss): 3092 KB
+Page reclaims (minflt): 466711
+Page faults (majflt): 0
+Block input operations (inblock): 0
+Block output operations (oublock): 0
+Voluntary context switches (nvcsw): 0
+Involuntary context switches (nivcsw): 109
+l1d access count: 45160142483
+l1d misses count: 494378302
+dtlb misses count: 2365216
+4.
+User CPU time (utime): 0.003920 / 23.573718 seconds (23.569798)
+System CPU time (stime): 0.000000 / 0.976071 seconds (0.976071)
+Max resident set size (maxrss): 3076 KB
+Page reclaims (minflt): 466402
+Page faults (majflt): 0
+Block input operations (inblock): 0
+Block output operations (oublock): 0
+Voluntary context switches (nvcsw): 0
+Involuntary context switches (nivcsw): 110
+l1d access count: 45140696917
+l1d misses count: 484048283
+dtlb misses count: 2357044
+5.
+User CPU time (utime): 0.003858 / 23.444502 seconds (23.440644)
+System CPU time (stime): 0.000000 / 1.092023 seconds (1.092023)
+Max resident set size (maxrss): 3040 KB
+Page reclaims (minflt): 466402
+Page faults (majflt): 0
+Block input operations (inblock): 0
+Block output operations (oublock): 0
+Voluntary context switches (nvcsw): 0
+Involuntary context switches (nivcsw): 121
+l1d access count: 45135418166
+l1d misses count: 506653739
+dtlb misses count: 2376848

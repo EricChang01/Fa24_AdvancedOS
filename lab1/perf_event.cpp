@@ -1,8 +1,11 @@
 #include <linux/perf_event.h>
 #include <sys/syscall.h>
 #include <sys/ioctl.h>
+#include <sys/resource.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <iostream>
@@ -58,13 +61,13 @@ void do_mem_access(char* p, int size) {
 
 void flush_L1_cache() {
     // L1 cache size is 512KB, allocate a buffer larger than this
-    size_t cache_size = 512 * 1024;  // 64 KB buffer
+    size_t cache_size = 600 * 1024;  // 64 KB buffer
     char *buffer = (char*)malloc(cache_size);
     
     // Write to the buffer to flush the cache (a simple write will force write-allocate on many CPUs)
-    for (size_t i = 0; i < cache_size; i++) {
-        buffer[i] = 0;
-    }
+    // for (size_t i = 0; i < cache_size; i++) {
+    //     buffer[i] = 0;
+    // }
 
     // Optional: read from the buffer to flush the cache via reads (depending on the CPU)
     for (size_t i = 0; i < cache_size; i++) {
@@ -77,7 +80,6 @@ void flush_L1_cache() {
 
 int main(int argc, char* argv[]){
     opt_random_access = argv[1]; // Set up opt_random_access with argument
-    std::cout << argv[1] << "\n";
 
     size_t bufferSize = 1024 * 1024 * 1024; // 1GB
     char* buffer = new char[bufferSize];
@@ -90,6 +92,8 @@ int main(int argc, char* argv[]){
     memset(&l1d_access, 0, sizeof(struct perf_event_attr));
     memset(&l1d_miss, 0, sizeof(struct perf_event_attr));
     memset(&dtlb_miss, 0, sizeof(struct perf_event_attr));
+
+    struct rusage usage_start, usage_end;
 
     l1d_access.type = PERF_TYPE_HW_CACHE;
     l1d_access.size = sizeof(struct perf_event_attr);
@@ -141,12 +145,33 @@ int main(int argc, char* argv[]){
     ioctl(dtlb_miss_fd, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
     ioctl(dtlb_miss_fd, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
 
+    if (getrusage(RUSAGE_SELF, &usage_start) != 0) {
+        perror("getrusage");
+    }
+
     // add the code to monitor, allocate a 1GB buffer
     do_mem_access(buffer, 1<<30);
 
     ioctl(l1d_access_fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
     ioctl(l1d_miss_fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
     ioctl(dtlb_miss_fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
+
+    if (getrusage(RUSAGE_SELF, &usage_end) == 0) {
+        // Print specific fields from the rusage struct
+        printf("User CPU time (utime): %ld.%06ld / %ld.%06ld seconds\n",
+               (long)usage_start.ru_utime.tv_sec, (long)usage_start.ru_utime.tv_usec, (long)usage_end.ru_utime.tv_sec, (long)usage_end.ru_utime.tv_usec);
+        printf("System CPU time (stime): %ld.%06ld / %ld.%06ld seconds\n",
+               (long)usage_start.ru_stime.tv_sec, (long)usage_start.ru_stime.tv_usec, (long)usage_end.ru_stime.tv_sec, (long)usage_end.ru_stime.tv_usec);
+        printf("Max resident set size (maxrss): %ld KB\n", usage_start.ru_maxrss);
+        printf("Page reclaims (minflt): %ld\n", usage_end.ru_minflt - usage_start.ru_minflt);
+        printf("Page faults (majflt): %ld\n", usage_end.ru_majflt - usage_start.ru_majflt);
+        printf("Block input operations (inblock): %ld\n", usage_end.ru_inblock - usage_start.ru_inblock);
+        printf("Block output operations (oublock): %ld\n", usage_end.ru_oublock - usage_start.ru_oublock);
+        printf("Voluntary context switches (nvcsw): %ld\n", usage_end.ru_nvcsw - usage_start.ru_nvcsw);
+        printf("Involuntary context switches (nivcsw): %ld\n", usage_end.ru_nivcsw - usage_start.ru_nivcsw);
+    } else {
+        perror("getrusage");
+    }
 
     long long count_l1d_access, count_l1d_miss, count_dtlb_miss;
     read(l1d_access_fd, &count_l1d_access, sizeof(long long)); // Read the event count
