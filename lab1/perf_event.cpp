@@ -85,7 +85,8 @@ int main(int argc, char* argv[]){
     opt_random_access = atoi(argv[1]); // Set up opt_random_access with argument
     int file_based_mmap = atoi(argv[2]); // map anonymous or file-backed memory
     int mmap_flag = atoi(argv[3]); // MAP_PRIVATE, MAP_SHARED or MAP_POPULATE
-    int opt_memset_msync = atoi(argv[4]);
+    int opt_map_populate = atoi(argv[4]);
+    int opt_memset_msync = atoi(argv[5]);
 
     struct perf_event_attr l1d_access, l1d_miss, dtlb_miss;
     memset(&l1d_access, 0, sizeof(struct perf_event_attr));
@@ -159,15 +160,27 @@ int main(int argc, char* argv[]){
             break;
         case 1:
             mmap_fd = open(FILE_PATH, O_RDWR);
+            if (mmap_fd < 0) {
+                perror("Failed to open file");
+                exit(1);
+            }
+            if (ftruncate(mmap_fd, bufferSize) == -1) {
+                perror("ftruncate failed");
+                close(mmap_fd);
+                exit(1);
+            } 
             switch (mmap_flag){
                 case 0: // MAP_PRIVATE
-                    buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_PRIVATE, mmap_fd, 0);
+                    if(opt_map_populate)
+                        buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_POPULATE, mmap_fd, 0);
+                    else
+                        buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_PRIVATE, mmap_fd, 0);
                     break;
                 case 1: // MAP_SHARED
-                    buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_SHARED, mmap_fd, 0);
-                    break;
-                case 2: // MAP_POPULATE
-                    buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_POPULATE, mmap_fd, 0);
+                    if(opt_map_populate)
+                        buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, mmap_fd, 0);
+                    else
+                        buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_SHARED, mmap_fd, 0);
                     break;
                 default:
                     fprintf(stderr, "Invalid mmap flag\n");
@@ -179,6 +192,7 @@ int main(int argc, char* argv[]){
             exit(1);
 
     }
+    printf("here\n");
     do_mem_access((char*)buffer, 1<<30);
 
     ioctl(l1d_access_fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
