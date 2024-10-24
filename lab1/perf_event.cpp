@@ -174,55 +174,55 @@ int main(int argc, char* argv[]){
 
     // add the code to monitor, allocate a 1GB buffer
     size_t bufferSize = 1024 * 1024 * 1024; // 1GB
-    void* buffer = malloc(bufferSize);
-    // void* buffer;
-    // int mmap_fd;
-    // switch (file_based_mmap){
-    //     case 0: // anonymous
-    //         buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    //         break;
-    //     case 1:
-    //         mmap_fd = open(FILE_PATH, O_RDWR);
-    //         if (mmap_fd < 0) {
-    //             perror("Failed to open file");
-    //             exit(1);
-    //         }
-    //         if (ftruncate(mmap_fd, bufferSize) == -1) {
-    //             perror("ftruncate failed");
-    //             close(mmap_fd);
-    //             exit(1);
-    //         } 
-    //         switch (mmap_flag){
-    //             case 0: // MAP_PRIVATE
-    //                 if(opt_map_populate)
-    //                     buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_POPULATE, mmap_fd, 0);
-    //                 else
-    //                     buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_PRIVATE, mmap_fd, 0);
-    //                 break;
-    //             case 1: // MAP_SHARED
-    //                 if(opt_map_populate)
-    //                     buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, mmap_fd, 0);
-    //                 else
-    //                     buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_SHARED, mmap_fd, 0);
-    //                 break;
-    //             default:
-    //                 fprintf(stderr, "Invalid mmap flag\n");
-    //                 exit(1);
-    //         }
-    //         break;
-    //     default:
-    //         fprintf(stderr, "Invalid mmap type\n");
-    //         exit(1);
+    // void* buffer = malloc(bufferSize);
+    void* buffer;
+    int mmap_fd;
+    switch (file_based_mmap){
+        case 0: // anonymous
+            buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+            break;
+        case 1:
+            mmap_fd = open(FILE_PATH, O_RDWR);
+            if (mmap_fd < 0) {
+                perror("Failed to open file");
+                exit(1);
+            }
+            if (ftruncate(mmap_fd, bufferSize) == -1) {
+                perror("ftruncate failed");
+                close(mmap_fd);
+                exit(1);
+            } 
+            switch (mmap_flag){
+                case 0: // MAP_PRIVATE
+                    if(opt_map_populate)
+                        buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_POPULATE, mmap_fd, 0);
+                    else
+                        buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_PRIVATE, mmap_fd, 0);
+                    break;
+                case 1: // MAP_SHARED
+                    if(opt_map_populate)
+                        buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_POPULATE, mmap_fd, 0);
+                    else
+                        buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_SHARED, mmap_fd, 0);
+                    break;
+                default:
+                    fprintf(stderr, "Invalid mmap flag\n");
+                    exit(1);
+            }
+            break;
+        default:
+            fprintf(stderr, "Invalid mmap type\n");
+            exit(1);
 
-    // }
-    // if(opt_memset_msync == 1){
-    //     memset(buffer, 0, bufferSize);
+    }
+    if(opt_memset_msync == 1){
+        memset(buffer, 0, bufferSize);
 
-    //     // Use msync to synchronize changes
-    //     if (msync(buffer, bufferSize, MS_SYNC) == -1) {
-    //         perror("msync error");
-    //     }
-    // }
+        // Use msync to synchronize changes
+        if (msync(buffer, bufferSize, MS_SYNC) == -1) {
+            perror("msync error");
+        }
+    }
 
     do_mem_access((char*)buffer, 1<<30);
 
