@@ -11,6 +11,7 @@
 #include <string.h>
 #include <errno.h>
 #include <iostream>
+#include <string>
 
 #define CACHE_LINE_SIZE 64
 #define FILE_PATH "file.dat"
@@ -81,6 +82,48 @@ void flush_L1_cache() {
     free(buffer);  // Free allocated buffer after flushing
 }
 
+int get_perf_event_fd(int type, int access){
+    struct perf_event_attr event;
+    memset(&event, 0, sizeof(struct perf_event_attr));
+
+    event.type = PERF_TYPE_HW_CACHE;
+    event.size = sizeof(struct perf_event_attr);
+    event.disabled = 1;
+    // l1d_access.exclude_kernel = 1; // only monitor user space
+    event.exclude_hv = 1;     // exclude hypervisor
+
+    switch(type){
+        case 0: // "l1d_access"
+            event.config = (PERF_COUNT_HW_CACHE_L1D | (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16));
+            break;
+        case 1: // "l1d_miss"
+            event.config = (PERF_COUNT_HW_CACHE_L1D | (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
+            break;
+        case 2: // "dtlb_miss"
+            event.config = (PERF_COUNT_HW_CACHE_DTLB | (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
+            break;
+    }
+
+    switch(access){
+        case 0:
+            event.config |= (PERF_COUNT_HW_CACHE_OP_READ << 8);
+            break;
+        case 1:
+            event.config |= (PERF_COUNT_HW_CACHE_OP_WRITE << 8);
+            break;
+        case 2:
+            event.config |= (PERF_COUNT_HW_CACHE_OP_PREFETCH << 8);
+            break;
+    }
+
+    int fd = syscall(__NR_perf_event_open, &event, 0, -1, -1, 0);
+    if (fd == -1) {
+        perror("perf event");
+        return -1;
+    }
+    return fd;
+}
+
 int main(int argc, char* argv[]){
     opt_random_access = atoi(argv[1]); // Set up opt_random_access with argument
     int file_based_mmap = atoi(argv[2]); // map anonymous or file-backed memory
@@ -88,63 +131,86 @@ int main(int argc, char* argv[]){
     int opt_map_populate = atoi(argv[4]);
     int opt_memset_msync = atoi(argv[5]);
 
-    struct perf_event_attr l1d_access, l1d_miss, dtlb_miss;
-    memset(&l1d_access, 0, sizeof(struct perf_event_attr));
-    memset(&l1d_miss, 0, sizeof(struct perf_event_attr));
-    memset(&dtlb_miss, 0, sizeof(struct perf_event_attr));
+    // struct perf_event_attr l1d_access, l1d_miss, dtlb_miss;
+    // memset(&l1d_access, 0, sizeof(struct perf_event_attr));
+    // memset(&l1d_miss, 0, sizeof(struct perf_event_attr));
+    // memset(&dtlb_miss, 0, sizeof(struct perf_event_attr));
 
-    struct rusage usage_start, usage_end;
+    // l1d_access.type = PERF_TYPE_HW_CACHE;
+    // l1d_access.size = sizeof(struct perf_event_attr);
+    // l1d_access.config = (PERF_COUNT_HW_CACHE_L1D | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16));
+    // l1d_access.disabled = 1;
+    // // l1d_access.exclude_kernel = 1; // only monitor user space
+    // l1d_access.exclude_hv = 1;     // exclude hypervisor
 
-    l1d_access.type = PERF_TYPE_HW_CACHE;
-    l1d_access.size = sizeof(struct perf_event_attr);
-    l1d_access.config = (PERF_COUNT_HW_CACHE_L1D | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_ACCESS << 16));
-    l1d_access.disabled = 1;
-    l1d_access.exclude_kernel = 1; // only monitor user space
-    l1d_access.exclude_hv = 1;     // exclude hypervisor
+    // l1d_miss.type = PERF_TYPE_HW_CACHE;
+    // l1d_miss.size = sizeof(struct perf_event_attr);
+    // l1d_miss.config = (PERF_COUNT_HW_CACHE_L1D | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
+    // l1d_miss.disabled = 1;
+    // // l1d_miss.exclude_kernel = 1; // only monitor user space
+    // l1d_miss.exclude_hv = 1;     // exclude hypervisor
 
-    l1d_miss.type = PERF_TYPE_HW_CACHE;
-    l1d_miss.size = sizeof(struct perf_event_attr);
-    l1d_miss.config = (PERF_COUNT_HW_CACHE_L1D | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
-    l1d_miss.disabled = 1;
-    l1d_miss.exclude_kernel = 1; // only monitor user space
-    l1d_miss.exclude_hv = 1;     // exclude hypervisor
+    // dtlb_miss.type = PERF_TYPE_HW_CACHE;
+    // dtlb_miss.size = sizeof(struct perf_event_attr);
+    // dtlb_miss.config = (PERF_COUNT_HW_CACHE_DTLB | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
+    // dtlb_miss.disabled = 1;
+    // // dtlb_miss.exclude_kernel = 1; // only monitor user space
+    // dtlb_miss.exclude_hv = 1;     // exclude hypervisor
 
-    dtlb_miss.type = PERF_TYPE_HW_CACHE;
-    dtlb_miss.size = sizeof(struct perf_event_attr);
-    dtlb_miss.config = (PERF_COUNT_HW_CACHE_DTLB | (PERF_COUNT_HW_CACHE_OP_READ << 8) | (PERF_COUNT_HW_CACHE_RESULT_MISS << 16));
-    dtlb_miss.disabled = 1;
-    dtlb_miss.exclude_kernel = 1; // only monitor user space
-    dtlb_miss.exclude_hv = 1;     // exclude hypervisor
+    // int l1d_access_fd = syscall(__NR_perf_event_open, &l1d_access, 0, -1, -1, 0);
+    // if (l1d_access_fd == -1) {
+    //     fprintf(stderr, "Error opening lid access %llx, %s\n", l1d_access.config, strerror(errno));
+    //     return -1;
+    // }
 
-    int l1d_access_fd = syscall(__NR_perf_event_open, &l1d_access, 0, -1, -1, 0);
-    if (l1d_access_fd == -1) {
-        fprintf(stderr, "Error opening lid access %llx, %s\n", l1d_access.config, strerror(errno));
-        return -1;
-    }
+    // int l1d_miss_fd = syscall(__NR_perf_event_open, &l1d_miss, 0, -1, -1, 0);
+    // if (l1d_miss_fd == -1) {
+    //     fprintf(stderr, "Error opening lid miss %llx, %s\n", l1d_miss.config, strerror(errno));
+    //     return -1;
+    // }
 
-    int l1d_miss_fd = syscall(__NR_perf_event_open, &l1d_miss, 0, -1, -1, 0);
-    if (l1d_miss_fd == -1) {
-        fprintf(stderr, "Error opening lid miss %llx, %s\n", l1d_miss.config, strerror(errno));
-        return -1;
-    }
+    // int dtlb_miss_fd = syscall(__NR_perf_event_open, &dtlb_miss, 0, -1, -1, 0);
+    // if (dtlb_miss_fd == -1) {
+    //     fprintf(stderr, "Error opening lid miss %llx, %s\n", dtlb_miss.config, strerror(errno));
+    //     return -1;
+    // }
 
-    int dtlb_miss_fd = syscall(__NR_perf_event_open, &dtlb_miss, 0, -1, -1, 0);
-    if (dtlb_miss_fd == -1) {
-        fprintf(stderr, "Error opening lid miss %llx, %s\n", dtlb_miss.config, strerror(errno));
-        return -1;
-    }
+    int l1d_access_read = get_perf_event_fd(0, 0);
+    int l1d_miss_read = get_perf_event_fd(1, 0);
+    int dtlb_miss_read = get_perf_event_fd(2, 0);
+
+    int l1d_access_write = get_perf_event_fd(0, 1);
+    int l1d_miss_write = get_perf_event_fd(1, 1);
+    int dtlb_miss_write = get_perf_event_fd(2, 1);
+
+    int l1d_access_pf = get_perf_event_fd(0, 1);
+    int l1d_miss_pf = get_perf_event_fd(1, 1);
+    int dtlb_miss_pf = get_perf_event_fd(2, 1);
 
     flush_L1_cache();
 
-    ioctl(l1d_access_fd, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
-    ioctl(l1d_access_fd, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
+    ioctl(l1d_access_read, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
+    ioctl(l1d_access_read, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
+    ioctl(l1d_miss_read, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
+    ioctl(l1d_miss_read, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
+    ioctl(dtlb_miss_read, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
+    ioctl(dtlb_miss_read, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
 
-    ioctl(l1d_miss_fd, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
-    ioctl(l1d_miss_fd, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
+    ioctl(l1d_access_write, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
+    ioctl(l1d_access_write, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
+    ioctl(l1d_miss_write, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
+    ioctl(l1d_miss_write, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
+    ioctl(dtlb_miss_write, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
+    ioctl(dtlb_miss_write, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
 
-    ioctl(dtlb_miss_fd, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
-    ioctl(dtlb_miss_fd, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
+    ioctl(l1d_access_pf, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
+    ioctl(l1d_access_pf, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
+    ioctl(l1d_miss_pf, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
+    ioctl(l1d_miss_pf, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
+    ioctl(dtlb_miss_pf, PERF_EVENT_IOC_RESET, 0);  // Reset the counter
+    ioctl(dtlb_miss_pf, PERF_EVENT_IOC_ENABLE, 0); // Start the counter
 
+    struct rusage usage_start, usage_end;
     if (getrusage(RUSAGE_SELF, &usage_start) != 0) {
         perror("getrusage");
     }
@@ -192,40 +258,78 @@ int main(int argc, char* argv[]){
             exit(1);
 
     }
-    printf("here\n");
+    if(opt_memset_msync == 1){
+        memset(buffer, 0, bufferSize);
+
+        // Use msync to synchronize changes
+        if (msync(buffer, bufferSize, MS_SYNC) == -1) {
+            perror("msync error");
+        }
+    }
+
     do_mem_access((char*)buffer, 1<<30);
 
-    ioctl(l1d_access_fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
-    ioctl(l1d_miss_fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
-    ioctl(dtlb_miss_fd, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
+    ioctl(l1d_access_read, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
+    ioctl(l1d_miss_read, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
+    ioctl(dtlb_miss_read, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
 
-    long long count_l1d_access, count_l1d_miss, count_dtlb_miss;
-    read(l1d_access_fd, &count_l1d_access, sizeof(long long)); // Read the event count
-    read(l1d_miss_fd, &count_l1d_miss, sizeof(long long)); // Read the event count
-    read(dtlb_miss_fd, &count_dtlb_miss, sizeof(long long)); // Read the event count
+    long long count_l1d_access_read, count_l1d_miss_read, count_dtlb_miss_read;
+    read(l1d_access_read, &count_l1d_access_read, sizeof(long long)); // Read the event count
+    read(l1d_miss_read, &count_l1d_miss_read, sizeof(long long)); // Read the event count
+    read(dtlb_miss_read, &count_dtlb_miss_read, sizeof(long long)); // Read the event count
 
-    printf("l1d access count: %lld\n", count_l1d_access);
-    printf("l1d misses count: %lld\n", count_l1d_miss);
-    printf("dtlb misses count: %lld\n", count_dtlb_miss);
+    ioctl(l1d_access_write, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
+    ioctl(l1d_miss_write, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
+    ioctl(dtlb_miss_write, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
+
+    long long count_l1d_access_write, count_l1d_miss_write, count_dtlb_miss_write;
+    read(l1d_access_write, &count_l1d_access_write, sizeof(long long)); // Read the event count
+    read(l1d_miss_write, &count_l1d_miss_write, sizeof(long long)); // Read the event count
+    read(dtlb_miss_write, &count_dtlb_miss_write, sizeof(long long)); // Read the event count
+
+    ioctl(l1d_access_pf, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
+    ioctl(l1d_miss_pf, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
+    ioctl(dtlb_miss_pf, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
+
+    long long count_l1d_access_pf, count_l1d_miss_pf, count_dtlb_miss_pf;
+    read(l1d_access_pf, &count_l1d_access_pf, sizeof(long long)); // Read the event count
+    read(l1d_miss_pf, &count_l1d_miss_pf, sizeof(long long)); // Read the event count
+    read(dtlb_miss_pf, &count_dtlb_miss_pf, sizeof(long long)); // Read the event count
+
 
     if (getrusage(RUSAGE_SELF, &usage_end) == 0) {
-        // Print specific fields from the rusage struct
-        printf("User CPU time (utime) in seconds: %f\n",
-               ((double)usage_end.ru_utime.tv_sec + (double)usage_end.ru_utime.tv_usec / 1000000) - ((double)usage_start.ru_utime.tv_sec + (double)usage_start.ru_utime.tv_usec / 1000000));
-        printf("System CPU time (stime) in seconds: %f\n",
-               ((double)usage_end.ru_stime.tv_sec + (double)usage_end.ru_stime.tv_usec / 1000000) - ((double)usage_start.ru_stime.tv_sec + (double)usage_start.ru_stime.tv_usec / 1000000));
-        printf("Max resident set size (maxrss) in KB: %ld\n", usage_start.ru_maxrss);
-        printf("Page reclaims (minflt): %ld\n", usage_end.ru_minflt - usage_start.ru_minflt);
-        printf("Page faults (majflt): %ld\n", usage_end.ru_majflt - usage_start.ru_majflt);
-        printf("Block input operations (inblock): %ld\n", usage_end.ru_inblock - usage_start.ru_inblock);
-        printf("Block output operations (oublock): %ld\n", usage_end.ru_oublock - usage_start.ru_oublock);
-        printf("Voluntary context switches (nvcsw): %ld\n", usage_end.ru_nvcsw - usage_start.ru_nvcsw);
-        printf("Involuntary context switches (nivcsw): %ld\n", usage_end.ru_nivcsw - usage_start.ru_nivcsw);
+        printf("%lld, %lld, %lld, %lld, %lld, %lld, %lld, %lld, %lld, %f, %f, %ld, %ld, %ld, %ld, %ld, %ld, %ld\n", 
+                count_l1d_access_read, 
+                count_l1d_access_write, 
+                count_l1d_access_pf, 
+                count_l1d_miss_read, 
+                count_l1d_miss_write, 
+                count_l1d_miss_pf, 
+                count_dtlb_miss_read, 
+                count_dtlb_miss_write, 
+                count_dtlb_miss_pf, 
+                ((double)usage_end.ru_utime.tv_sec + (double)usage_end.ru_utime.tv_usec / 1000000) - ((double)usage_start.ru_utime.tv_sec + (double)usage_start.ru_utime.tv_usec / 1000000), 
+                ((double)usage_end.ru_stime.tv_sec + (double)usage_end.ru_stime.tv_usec / 1000000) - ((double)usage_start.ru_stime.tv_sec + (double)usage_start.ru_stime.tv_usec / 1000000),
+                usage_start.ru_maxrss,
+                usage_end.ru_minflt - usage_start.ru_minflt,
+                usage_end.ru_majflt - usage_start.ru_majflt,
+                usage_end.ru_inblock - usage_start.ru_inblock,
+                usage_end.ru_oublock - usage_start.ru_oublock,
+                usage_end.ru_nvcsw - usage_start.ru_nvcsw,
+                usage_end.ru_nivcsw - usage_start.ru_nivcsw);
     } else {
         perror("getrusage");
     }
     
-    close(l1d_access_fd);
-    close(l1d_miss_fd);
-    close(dtlb_miss_fd);
+    close(l1d_access_read);
+    close(l1d_miss_read);
+    close(dtlb_miss_read);
+
+    close(l1d_access_write);
+    close(l1d_miss_write);
+    close(dtlb_miss_write);
+
+    close(l1d_access_pf);
+    close(l1d_miss_pf);
+    close(dtlb_miss_pf);
 }
