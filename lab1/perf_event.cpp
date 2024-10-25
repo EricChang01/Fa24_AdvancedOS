@@ -4,6 +4,8 @@
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <sys/mman.h>
+#include <sys/sysinfo.h>
+#include <sys/wait.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -12,6 +14,7 @@
 #include <errno.h>
 #include <iostream>
 #include <string>
+#include <signal.h>
 
 #define CACHE_LINE_SIZE 64
 #define FILE_PATH "file.dat"
@@ -29,6 +32,15 @@ long simplerand(void) {
 	w ^= w >> 19;
 	w ^= t;
 	return w;
+}
+
+long get_mem_size() {
+    struct sysinfo info;
+    if (sysinfo(&info) != 0) {
+        perror("sysinfo");
+        return -1;
+    }
+    return info.totalram;
 }
 
 // p points to a region that is 1GB (ideally)
@@ -119,19 +131,44 @@ int get_perf_event_fd(int type, int access){
     int fd = syscall(__NR_perf_event_open, &event, 0, -1, -1, 0);
     if (fd == -1) {
         fprintf(stderr, "type: %d access: %d\n", type, access);
-        perror("perf event");
+        perror("perf event not found");
         return -1;
     }
     return fd;
 }
 
-int main(int argc, char* argv[]){
-    opt_random_access = atoi(argv[1]); // Set up opt_random_access with argument
-    int file_based_mmap = atoi(argv[2]); // map anonymous or file-backed memory
-    int mmap_flag = atoi(argv[3]); // MAP_PRIVATE, MAP_SHARED or MAP_POPULATE
-    int opt_map_populate = atoi(argv[4]);
-    int opt_memset_msync = atoi(argv[5]);
+int compete_for_memory(void* unused) {
+   long mem_size = get_mem_size();
+   int page_sz = sysconf(_SC_PAGE_SIZE);
+   printf("Total memsize is %3.2f GBs\n", (double)mem_size/(1024*1024*1024));
+   fflush(stdout);
+   char* p = (char*) mmap(NULL, mem_size, PROT_READ | PROT_WRITE,
+                  MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, (off_t) 0);
+   if (p == MAP_FAILED) {
+      perror("Failed anon MMAP competition");
+      return -1;
+   }
 
+   int i = 0;
+   while (1) {
+      volatile char *a;
+      long r = simplerand() % (mem_size / page_sz);
+      char c = 0;
+      if (i >= mem_size / page_sz) {
+         i = 0;
+      }
+      // Random access to memory
+      a = p + r * page_sz;
+      c += *a;
+      if ((i % 8) == 0) {
+         *a = 1;
+      }
+      i++;
+   }
+   return 0;
+}
+
+void do_mem_access_and_perf(int opt_random_access, int file_based_mmap, int mmap_flag, int opt_map_populate, int opt_memset_msync){
     int l1d_access_read = get_perf_event_fd(0, 0);
     int l1d_miss_read = get_perf_event_fd(1, 0);
     int dtlb_miss_read = get_perf_event_fd(2, 0);
@@ -292,4 +329,46 @@ int main(int argc, char* argv[]){
     close(l1d_access_pf);
     close(l1d_miss_pf);
     close(dtlb_miss_pf);
+}
+
+int main(int argc, char* argv[]){
+    opt_random_access = atoi(argv[1]); // Set up opt_random_access with argument
+    int file_based_mmap = atoi(argv[2]); // map anonymous or file-backed memory
+    int mmap_flag = atoi(argv[3]); // MAP_PRIVATE, MAP_SHARED or MAP_POPULATE
+    int opt_map_populate = atoi(argv[4]);
+    int opt_memset_msync = atoi(argv[5]);
+    int opt_compete_memory = atoi(argv[6]);
+
+    if(opt_compete_memory){
+        pid_t pid = fork();
+
+        if (pid == -1) {
+            // Fork failed
+            perror("fork");
+            exit(EXIT_FAILURE);
+        } else if (pid == 0) {
+            // In child process
+            compete_for_memory(NULL);
+            exit(EXIT_SUCCESS);
+        } else {
+            // In parent process
+            printf("Created child process with PID %d\n", pid);
+
+            // Simulate some work in the parent
+            do_mem_access_and_perf(opt_random_access, file_based_mmap, mmap_flag, opt_map_populate, opt_memset_msync);
+
+            // Ensure the child process terminates when the main program ends
+            kill(pid, SIGTERM);  // Send SIGTERM to child process
+
+            int status;
+            waitpid(pid, &status, 0); // Wait for child process to finish
+            if (WIFEXITED(status)) {
+                printf("Child exited with status %d\n", WEXITSTATUS(status));
+            }
+        }
+    }
+    else {
+        do_mem_access_and_perf(opt_random_access, file_based_mmap, mmap_flag, opt_map_populate, opt_memset_msync);
+    }
+    return 0;
 }
