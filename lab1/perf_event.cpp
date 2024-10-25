@@ -216,7 +216,10 @@ void do_mem_access_and_perf(int opt_random_access, int file_based_mmap, int mmap
     int mmap_fd;
     switch (file_based_mmap){
         case 0: // anonymous
-            buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+            if(opt_map_populate)
+                buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_POPULATE, -1, 0);
+            else
+                buffer = mmap(NULL, bufferSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
             break;
         case 1:
             mmap_fd = open(FILE_PATH, O_RDWR);
@@ -261,7 +264,7 @@ void do_mem_access_and_perf(int opt_random_access, int file_based_mmap, int mmap
         }
     }
 
-    do_mem_access((char*)buffer, 1<<30);
+    do_mem_access((char*)buffer, 1<<30 * 9 / 10);
 
     ioctl(l1d_access_read, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
     ioctl(l1d_miss_read, PERF_EVENT_IOC_DISABLE, 0); // Stop the counter
@@ -348,9 +351,28 @@ int main(int argc, char* argv[]){
             exit(EXIT_FAILURE);
         } else if (pid == 0) {
             // In child process
+            cpu_set_t cpuset;
+            CPU_ZERO(&cpuset);
+            CPU_SET(1, &cpuset);
+
+            pid_t pid = 0;  // Lock the current process to CPU 0
+            if (sched_setaffinity(pid, sizeof(cpu_set_t), &cpuset) == -1) {
+                perror("sched_setaffinity");
+                return EXIT_FAILURE;
+            }
+
             compete_for_memory(NULL);
             exit(EXIT_SUCCESS);
         } else {
+            cpu_set_t cpuset;
+            CPU_ZERO(&cpuset);
+            CPU_SET(0, &cpuset);
+
+            pid_t pid = 0;  // Lock the current process to CPU 0
+            if (sched_setaffinity(pid, sizeof(cpu_set_t), &cpuset) == -1) {
+                perror("sched_setaffinity");
+                return EXIT_FAILURE;
+            }
             // In parent process
             printf("Created child process with PID %d\n", pid);
 
