@@ -8,54 +8,95 @@
 #include "util_func.hpp"
 using namespace std;
 
-char** copy_args (void* stack, int argc, char* argv[]) {
-    int* argcPtr = (int*)stack;
+#include <stdlib.h>
+#include <stdio.h>
+#include <elf.h>
+#include <assert.h>
+#include <string.h>
 
-    *argcPtr = argc - 1;
-    argcPtr++;
+extern char** environ;
 
-    char** argvPtr = (char**)(argcPtr);  // Move the pointer past the 'argc' value
+void stack_check(void* top_of_stack, uint64_t argc, char** argv) {
+	printf("----- stack check -----\n");
+
+	assert(((uint64_t)top_of_stack) % 8 == 0);
+	printf("top of stack is 8-byte aligned\n");
+
+	uint64_t* stack = (uint64_t*)top_of_stack;
+	uint64_t actual_argc = *(stack++);
+    cout << "actual_argc " << actual_argc << "\n";
+	printf("argc: %lu\n", actual_argc);
+	assert(actual_argc == argc);
+
+	for (int i = 0; i < argc; i++) {
+		char* argp = (char*)*(stack++);
+		assert(strcmp(argp, argv[i]) == 0);
+		printf("arg %d: %s\n", i, argp);
+	}
+	// Argument list ends with null pointer
+	assert(*(stack++) == 0);
+
+	int envp_count = 0;
+	while (*(stack++) != 0)
+		envp_count++;
+
+	printf("env count: %d\n", envp_count);
+
+	Elf64_auxv_t* auxv_start = (Elf64_auxv_t*)stack;
+	Elf64_auxv_t* auxv_null = auxv_start;
+	while (auxv_null->a_type != AT_NULL) {
+		auxv_null++;
+	}
+	printf("aux count: %lu\n", auxv_null - auxv_start);
+	printf("----- end stack check -----\n");
+}
+
+uint64_t* copy_args (char** argvPtr, int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
         memcpy(argvPtr, argv[i], sizeof(char*));
         argvPtr++;
     }
-    return argvPtr;
+    cout << "Before argv: " << argvPtr << "\n";
+    argvPtr -= (argc-1);
+    argv++;
+    memcpy(argvPtr, argv, (argc - 1) * sizeof(char));
+
+    cout << "After argv: " << argvPtr << "\n";
+
+    uint64_t* argcPtr = (uint64_t*)argvPtr;
+
+    argcPtr--;
+    *argcPtr = (argc - 1);
+
+    return argcPtr;
 }
 
-Elf64_auxv_t* copy_auxv(Elf64_auxv_t *auxvPtr) {
-    int fd = open("/proc/self/auxv", O_RDONLY);
-    if (fd == -1) {
-        perror("open");
-        exit(EXIT_FAILURE);
+Elf64_auxv_t* copy_auxv(Elf64_auxv_t* auxvBeg, Elf64_auxv_t* auxvPtr){
+    int count = 0;
+    Elf64_auxv_t* curr = auxvBeg;
+    while(curr -> a_type != AT_NULL){
+        count++;
+        curr++;
     }
-
-    Elf64_auxv_t auxv;
-    int num_auxv = 0;
-
-    // Read the auxiliary vector entries one at a time
-    while (read(fd, &auxv, sizeof(auxv)) == sizeof(auxv)) {
-        // Copy the auxv to the destination pointer (auxvPtr + num_auxv)
-        memcpy(auxvPtr, &auxv, sizeof(Elf64_auxv_t));
-        num_auxv++;
-        auxvPtr++;
-
-        // Stop reading when encountering the AT_NULL entry
-        if (auxv.a_type == AT_NULL) {
-            break;
-        }
-
-        // Print out the type and value for demonstration purposes
-        // printf("Type: %lu, Value: %lx\n", auxv.a_type, auxv.a_un.a_val);
-    }
+    count++;
+    // cout << "auxv count: " << count << "\n";
+    // cout << "Bef move: " << auxvPtr << "\n";
+    auxvPtr -= count;
+    // cout << "Aft move: " << auxvPtr << "\n";
+    memcpy(auxvPtr, auxvBeg, count * sizeof(Elf64_auxv_t));
+    // cout << "Aft copy: " << auxvPtr << "\n";
     return auxvPtr;
+
 }
 
-extern char** environ;
 char** copy_envp(char** envpPtr) {
+    char** begin = environ;
+    int count = 0;
     for (char** env = environ; *env != NULL; ++env) {
-        memcpy(envpPtr, env, sizeof(char*));
-        envpPtr++;
+        count++;
     }
+    envpPtr -= count;
+    memcpy(envpPtr, environ, count * sizeof(char*));
     return envpPtr;
 } 
 
@@ -63,23 +104,30 @@ void build_stack(int argc, char* argv[]){
     // allocate stack
     size_t size = 8 * 1024 * 1024;
     void* stack = malloc(size);
-
     if (stack == nullptr) {
         fprintf(stderr, "stack allocation fails\n");
         return ;
     }
-
+    
 #ifdef StackBuild
-    cout << "Init: " << stack << "\n";
+    cout << "Beg: " << stack << "\n";
 #endif
 
-    char** argvPtr = copy_args(stack, argc, argv);
+// move to highest address
+stack = (void*) (reinterpret_cast<unsigned char*>(stack) + size);
 
 #ifdef StackBuild
-    cout << "Args: " << argvPtr << "\n";
+    cout << "Adj: " << stack << "\n";
 #endif
 
-    Elf64_auxv_t* auxvPtr = copy_auxv((Elf64_auxv_t*)(argvPtr));
+    char** env = environ;
+    size_t total_size = 0;
+    for (env = environ; *env != NULL; ++env) {
+        // iterate through
+    }
+    env++; // start of auxv
+
+    Elf64_auxv_t* auxvPtr = copy_auxv((Elf64_auxv_t*)env, (Elf64_auxv_t*)stack);
 
 #ifdef StackBuild
     cout << "Auxv: " << auxvPtr << "\n";
@@ -90,6 +138,14 @@ void build_stack(int argc, char* argv[]){
 #ifdef StackBuild
     cout << "Envp: " << envpPtr << "\n";
 #endif
+
+    uint64_t* argcPtr = copy_args((char**) envpPtr, argc, argv);
+
+#ifdef StackBuild
+    cout << "Args: " << argcPtr << "\n";
+    cout << "Argc = " << *argcPtr << "\n";
+#endif
+    stack_check(argcPtr, argc - 1, argv++);
 }
 
 void load_and_execute(string filepath, int argc, char* argv[]){
