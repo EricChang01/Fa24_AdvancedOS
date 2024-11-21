@@ -1,0 +1,1 @@
+- To generate a default linker: `g++ -Wl,--verbose -static -o prog1 prog1.cpp > default.ld`

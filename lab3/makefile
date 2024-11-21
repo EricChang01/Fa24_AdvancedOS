@@ -1,22 +1,21 @@
 # Variables
 CXX = g++                 
-CXXFLAGS = -std=c++11  # Compilation flags
+CXXFLAGS = -static  # Compilation flags
 TARGET_APAGER = apager  # Target program to test, default is 'default_program'
 TARGET_PROG1 = prog1
 SRC_APAGER = apager.cpp       # C++ source file (you can add more .cpp files here)
 SRC_PROG1 = prog1.cpp
-LD_APAGER = apager.ld
-LD_PROG1 = prog1.ld
+LD = default.ld
 
 DEBUG = -D StackBuild
 
 all: $(TARGET_APAGER) $(TARGET_PROG1)
 
-$(TARGET_APAGER): $(SRC_APAGER) $(LD_APAGER)
-	$(CXX) $(CXXFLAGS) -o $(TARGET_APAGER) $(SRC_APAGER) -T $(LD_APAGER) $(DEBUG)
+$(TARGET_APAGER): $(SRC_APAGER) $(LD)
+	$(CXX) $(CXXFLAGS) -o $(TARGET_APAGER) $(SRC_APAGER)
 
-$(TARGET_PROG1): $(SRC_PROG1) $(LD_PROG1)
-	$(CXX) $(CXXFLAGS) -o $(TARGET_PROG1) $(SRC_PROG1)  -T $(LD_PROG1)
+$(TARGET_PROG1): $(SRC_PROG1) $(LD)
+	$(CXX) $(CXXFLAGS) -o $(TARGET_PROG1) $(SRC_PROG1)  -T $(LD)
 
 # Clean up generated files
 clean:

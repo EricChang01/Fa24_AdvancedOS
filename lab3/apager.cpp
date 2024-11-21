@@ -165,6 +165,18 @@ stack = (void*) (reinterpret_cast<unsigned char*>(stack) + size);
     return argcPtr;
 }
 
+void tranfer_control(uint64_t* stack, Elf64_Ehdr elf_header){
+    cout << "entry point " << elf_header.e_entry << "\n";
+    __asm__ volatile(
+        "movq %0, %%rsp\n"           // Set stack pointer
+        "xor %%rbp, %%rbp\n"         // Clear base pointer (optional)
+        "jmp *%1\n"                  // Jump to entry point
+        :
+        : "r"(stack), "r"(elf_header.e_entry) // Inputs: new stack and entry point
+        : "memory"                   // Clobbered: memory
+    );
+}
+
 /** ELF header
     unsigned char e_ident[16];  // ELF identification
     uint16_t e_type;             // Type of the file (e.g., executable)
@@ -182,18 +194,18 @@ stack = (void*) (reinterpret_cast<unsigned char*>(stack) + size);
     uint16_t e_shstrndx;         // Section name string table index
 */
 
-uint64_t* load(string filepath, int argc, char* argv[]){
+void load(string filepath, int argc, char* argv[]){
     ifstream binary(filepath, std::ios::binary);
     if (!binary){
         fprintf(stderr, "Failed to open binary\n");
-        return NULL;
+        return ;
     }
 
     Elf64_Ehdr elf_header;
     binary.read((char*)(&elf_header), sizeof(elf_header));
     if (strncmp((const char*)(elf_header.e_ident), ELFMAG, SELFMAG) != 0) {
         fprintf(stderr, "Invalid ELF file\n");
-        return NULL;
+        return ;
     }
 
     binary.seekg(elf_header.e_phoff, std::ios::beg);
@@ -207,16 +219,62 @@ uint64_t* load(string filepath, int argc, char* argv[]){
 
     for (int i=0; i<elf_header.e_phnum; i++) {
         Elf64_Phdr ph = phdrs[i];
+
         if (ph.p_type == PT_LOAD) { // loadable segment
-            void* segment = mmap((void*)(ph.p_vaddr), 
-                                ph.p_memsz,
-                                PROT_READ | PROT_WRITE | PROT_EXEC,
-                                MAP_PRIVATE | MAP_ANONYMOUS,
-                                -1, 0);
+            std::cout << "Type: " << ph.p_type << ", Offset: 0x" 
+                << std::hex << ph.p_offset << ", VirtAddr: 0x" 
+                << ph.p_vaddr << ", FileSize: 0x" 
+                << ph.p_filesz << ", MemSize: 0x" 
+                << ph.p_memsz << "\n";
+            int section_type = 0;
+            if(ph.p_filesz < ph.p_memsz){
+                cout << "--- BSS section ---\n";
+                section_type = 2; // bss
+            } else if (ph.p_filesz == ph.p_memsz){
+                if((ph.p_flags & (PF_X | PF_R)) == (PF_X | PF_R)){
+                    section_type = 0; // text
+                    cout << "--- Text section --- \n";
+                } else {
+                    section_type = 1; // data
+                    cout << "--- Data section --- \n";
+                }
+            }
+
+            void* segment;
+            switch(section_type){
+                case 0: // text
+                cout << "virtual start point of text: " << ph.p_vaddr << "\n";
+                segment = mmap((void*)(ph.p_vaddr), 
+                            ph.p_memsz,
+                            PROT_READ | PROT_WRITE | PROT_EXEC,
+                            MAP_PRIVATE | MAP_ANONYMOUS,
+                            -1, 0);
+                cout << "address actually allocated: " << hex << segment << "\n";
+                break;
+                case 1: // data
+                cout << "virtual start point of data: " << hex << ph.p_vaddr << "\n";
+                segment = mmap((void*)(ph.p_vaddr), 
+                            ph.p_memsz,
+                            PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS,
+                            -1, 0);
+                cout << "address actually allocated: " << hex << segment << "\n";
+                break;
+                case 2: // bss
+                cout << "virtual start point of bss: " << hex << ph.p_vaddr << "\n";
+                segment = mmap((void*)(ph.p_vaddr), 
+                            ph.p_memsz,
+                            PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS,
+                            -1, 0);
+                cout << "address actually allocated: " << hex << segment << "\n";
+                break;
+
+            }      
 
             if (segment == MAP_FAILED) {
                 perror("mmap failed");
-                return NULL;
+                return ;
             }
 
             // Load segment data
@@ -228,20 +286,16 @@ uint64_t* load(string filepath, int argc, char* argv[]){
                 memset((char*)(segment) + ph.p_filesz, 0, ph.p_memsz - ph.p_filesz);
             }
 
-            if (!entry_point) {
-                entry_point = (void*)(elf_header.e_entry);
-            }
         } else if (ph.p_type == PT_INTERP){
             intp_base_address = ph.p_vaddr;
             cout << "Interpreter base address " << hex << intp_base_address << "\n";
         }
     }
-    return build_stack(argc, argv, elf_header, intp_base_address, phdrs);
-
+    uint64_t* stack = build_stack(argc, argv, elf_header, intp_base_address, phdrs);
+    tranfer_control(stack, elf_header);
 }
 
 int main(int argc, char* argv[]){   
     string filepath = argv[1];
-    uint64_t* entry_point = load(filepath, argc, argv);
-    cout << "entry point value: " << *entry_point << "\n";
+    load(filepath, argc, argv);
 }
