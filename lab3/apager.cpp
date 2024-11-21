@@ -68,7 +68,7 @@ uint64_t* copy_args (char** argvPtr, int argc, char* argv[]) {
     return argcPtr;
 }
 
-Elf64_auxv_t* copy_auxv(Elf64_auxv_t* auxvBeg, Elf64_auxv_t* auxvPtr){
+Elf64_auxv_t* copy_auxv(Elf64_auxv_t* auxvBeg, Elf64_auxv_t* auxvPtr, char* execFn){
     int count = 0;
     Elf64_auxv_t* curr = auxvBeg;
     while(curr -> a_type != AT_NULL){
@@ -81,6 +81,29 @@ Elf64_auxv_t* copy_auxv(Elf64_auxv_t* auxvBeg, Elf64_auxv_t* auxvPtr){
     auxvPtr -= count;
     // cout << "Aft move: " << auxvPtr << "\n";
     memcpy(auxvPtr, auxvBeg, count * sizeof(Elf64_auxv_t));
+    Elf64_auxv_t* replace = auxvPtr;
+    while(replace -> a_type != AT_NULL){
+        switch(replace -> a_type){
+            case AT_PHDR:
+                cout << "Program headers for program: " << hex << curr -> a_un.a_val << "\n";
+                break;
+            case AT_BASE:
+                cout << "Base address of interpreter " << hex << curr -> a_un.a_val << "\n";;
+                break;
+            case AT_ENTRY:
+                cout << "Entry point of program " << hex << curr -> a_un.a_val << "\n";
+                break;
+            case AT_RANDOM:
+                cout << "AT_RANDOM\n";
+                break;
+            case AT_EXECFN:
+                // strcpy(replace -> a_un.a_val, execFn);
+                printf("AT_EXECFN, new string: %ld\n", replace -> a_un.a_val);
+                break;
+            
+        }
+        replace++;
+    }
     // cout << "Aft copy: " << auxvPtr << "\n";
     return auxvPtr;
 
@@ -124,7 +147,7 @@ stack = (void*) (reinterpret_cast<unsigned char*>(stack) + size);
     }
     env++; // start of auxv
 
-    Elf64_auxv_t* auxvPtr = copy_auxv((Elf64_auxv_t*)env, (Elf64_auxv_t*)stack);
+    Elf64_auxv_t* auxvPtr = copy_auxv((Elf64_auxv_t*)env, (Elf64_auxv_t*)stack, argv[1]);
 
 #ifdef StackBuild
     cout << "Auxv: " << auxvPtr << "\n";
@@ -168,6 +191,11 @@ void load_and_execute(string filepath, int argc, char* argv[]){
     void* entry_point = nullptr;
     for (const auto& ph : phdrs) {
         if (ph.p_type == PT_LOAD) { // loadable segment
+            std::cout << "Type: " << ph.p_type << ", Offset: 0x" 
+                << std::hex << ph.p_offset << ", VirtAddr: 0x" 
+                << ph.p_vaddr << ", FileSize: 0x" 
+                << ph.p_filesz << ", MemSize: 0x" 
+                << ph.p_memsz << "\n";
             void* segment = mmap((void*)(ph.p_vaddr), 
                                 ph.p_memsz,
                                 PROT_READ | PROT_WRITE | PROT_EXEC,
