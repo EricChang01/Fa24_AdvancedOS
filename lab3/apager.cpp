@@ -24,12 +24,14 @@ void stack_check(void* top_of_stack, uint64_t argc, char** argv) {
 
 	uint64_t* stack = (uint64_t*)top_of_stack;
 	uint64_t actual_argc = *(stack++);
-    cout << "actual_argc " << actual_argc << "\n";
 	printf("argc: %lu\n", actual_argc);
 	assert(actual_argc == argc);
 
+    cout << "addr after argc: " << stack << "\n";
+
 	for (int i = 0; i < argc; i++) {
 		char* argp = (char*)*(stack++);
+        // printf("argp = %s, argv[i] = %s\n", argp, argv[i]);
 		assert(strcmp(argp, argv[i]) == 0);
 		printf("arg %d: %s\n", i, argp);
 	}
@@ -52,14 +54,10 @@ void stack_check(void* top_of_stack, uint64_t argc, char** argv) {
 }
 
 uint64_t* copy_args (char** argvPtr, int argc, char* argv[]) {
-    for (int i = 1; i < argc; ++i) {
-        memcpy(argvPtr, argv[i], sizeof(char*));
-        argvPtr++;
-    }
     cout << "Before argv: " << argvPtr << "\n";
-    argvPtr -= (argc-1);
+    argvPtr -= (argc - 1);
     argv++;
-    memcpy(argvPtr, argv, (argc - 1) * sizeof(char));
+    memcpy(argvPtr, argv, (argc - 1) * sizeof(char*));
 
     cout << "After argv: " << argvPtr << "\n";
 
@@ -145,7 +143,7 @@ stack = (void*) (reinterpret_cast<unsigned char*>(stack) + size);
     cout << "Args: " << argcPtr << "\n";
     cout << "Argc = " << *argcPtr << "\n";
 #endif
-    stack_check(argcPtr, argc - 1, argv++);
+    stack_check(argcPtr, argc - 1, ++argv);
 }
 
 void load_and_execute(string filepath, int argc, char* argv[]){
