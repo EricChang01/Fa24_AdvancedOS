@@ -116,13 +116,13 @@ char** copy_envp(char** envpPtr) {
     return envpPtr;
 } 
 
-void build_stack(int argc, char* argv[], Elf64_Ehdr elf_header, Elf64_Addr intp_base_address, Elf64_Phdr* phdrs){
+uint64_t* build_stack(int argc, char* argv[], Elf64_Ehdr elf_header, Elf64_Addr intp_base_address, Elf64_Phdr* phdrs){
     // allocate stack
     size_t size = 8 * 1024 * 1024;
     void* stack = malloc(size);
     if (stack == nullptr) {
         fprintf(stderr, "stack allocation fails\n");
-        return ;
+        return NULL;
     }
     
 #ifdef StackBuild
@@ -162,6 +162,7 @@ stack = (void*) (reinterpret_cast<unsigned char*>(stack) + size);
     cout << "Argc = " << *argcPtr << "\n";
 #endif
     stack_check(argcPtr, argc - 1, ++argv);
+    return argcPtr;
 }
 
 /** ELF header
@@ -181,42 +182,32 @@ stack = (void*) (reinterpret_cast<unsigned char*>(stack) + size);
     uint16_t e_shstrndx;         // Section name string table index
 */
 
-void load_and_execute(string filepath, int argc, char* argv[]){
+uint64_t* load(string filepath, int argc, char* argv[]){
     ifstream binary(filepath, std::ios::binary);
     if (!binary){
         fprintf(stderr, "Failed to open binary\n");
-        return;
+        return NULL;
     }
 
     Elf64_Ehdr elf_header;
     binary.read((char*)(&elf_header), sizeof(elf_header));
     if (strncmp((const char*)(elf_header.e_ident), ELFMAG, SELFMAG) != 0) {
         fprintf(stderr, "Invalid ELF file\n");
-        return;
+        return NULL;
     }
 
     binary.seekg(elf_header.e_phoff, std::ios::beg);
     Elf64_Phdr* phdrs = (Elf64_Phdr*)malloc(elf_header.e_phnum * sizeof(Elf64_Phdr));
-
-    cout << "Program header address: " << phdrs << "\n";
-
-    // vector<Elf64_Phdr> phdrs(elf_header.e_phnum); // program headers
     for(int i=0; i<elf_header.e_phnum; i++)
         binary.read(reinterpret_cast<char*>(&phdrs[i]), sizeof(Elf64_Phdr));
 
     // Allocate memory for the program
     void* entry_point = nullptr;
     Elf64_Addr intp_base_address; // base address of the intepreter
-    // Elf64_Addr phdr_address = phdrs;
-    // cout << "Program header address: " << phdr_address << "\n";
+
     for (int i=0; i<elf_header.e_phnum; i++) {
         Elf64_Phdr ph = phdrs[i];
         if (ph.p_type == PT_LOAD) { // loadable segment
-            // std::cout << "Type: " << ph.p_type << ", Offset: 0x" 
-            //     << std::hex << ph.p_offset << ", VirtAddr: 0x" 
-            //     << ph.p_vaddr << ", FileSize: 0x" 
-            //     << ph.p_filesz << ", MemSize: 0x" 
-            //     << ph.p_memsz << "\n";
             void* segment = mmap((void*)(ph.p_vaddr), 
                                 ph.p_memsz,
                                 PROT_READ | PROT_WRITE | PROT_EXEC,
@@ -225,7 +216,7 @@ void load_and_execute(string filepath, int argc, char* argv[]){
 
             if (segment == MAP_FAILED) {
                 perror("mmap failed");
-                return;
+                return NULL;
             }
 
             // Load segment data
@@ -245,11 +236,12 @@ void load_and_execute(string filepath, int argc, char* argv[]){
             cout << "Interpreter base address " << hex << intp_base_address << "\n";
         }
     }
-    build_stack(argc, argv, elf_header, intp_base_address, phdrs);
+    return build_stack(argc, argv, elf_header, intp_base_address, phdrs);
 
 }
 
 int main(int argc, char* argv[]){   
     string filepath = argv[1];
-    load_and_execute(filepath, argc, argv);
+    uint64_t* entry_point = load(filepath, argc, argv);
+    cout << "entry point value: " << *entry_point << "\n";
 }
