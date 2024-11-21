@@ -5,30 +5,19 @@
 #include <elf.h>
 #include <vector>
 #include <sys/mman.h>
-#include "util.hpp"
+#include "util_func.hpp"
 using namespace std;
 
 char** copy_args (void* stack, int argc, char* argv[]) {
     int* argcPtr = (int*)stack;
 
-#ifdef StackBuild
-cout << "addr: " << argcPtr << "\n";
-#endif
     *argcPtr = argc - 1;
     argcPtr++;
-
-#ifdef StackBuild
-    cout << "argc = " << *argcPtr << "\n";
-    cout << "addr: " << argcPtr << "\n";
-#endif
 
     char** argvPtr = (char**)(argcPtr);  // Move the pointer past the 'argc' value
     for (int i = 1; i < argc; ++i) {
         memcpy(argvPtr, argv[i], sizeof(char*));
         argvPtr++;
-#ifdef StackBuild
-        cout << "addr: " << argvPtr << "\n";
-#endif
     }
     return argvPtr;
 }
@@ -58,12 +47,17 @@ Elf64_auxv_t* copy_auxv(Elf64_auxv_t *auxvPtr) {
         // Print out the type and value for demonstration purposes
         // printf("Type: %lu, Value: %lx\n", auxv.a_type, auxv.a_un.a_val);
     }
-#ifdef StackBuild
-    cout << "addr: " << auxvPtr << "\n";
-#endif
-    cout << "num auxv: " << num_auxv << "\n";
     return auxvPtr;
 }
+
+extern char** environ;
+char** copy_envp(char** envpPtr) {
+    for (char** env = environ; *env != NULL; ++env) {
+        memcpy(envpPtr, env, sizeof(char*));
+        envpPtr++;
+    }
+    return envpPtr;
+} 
 
 void build_stack(int argc, char* argv[]){
     // allocate stack
@@ -75,8 +69,27 @@ void build_stack(int argc, char* argv[]){
         return ;
     }
 
+#ifdef StackBuild
+    cout << "Init: " << stack << "\n";
+#endif
+
     char** argvPtr = copy_args(stack, argc, argv);
+
+#ifdef StackBuild
+    cout << "Args: " << argvPtr << "\n";
+#endif
+
     Elf64_auxv_t* auxvPtr = copy_auxv((Elf64_auxv_t*)(argvPtr));
+
+#ifdef StackBuild
+    cout << "Auxv: " << auxvPtr << "\n";
+#endif
+
+    char** envpPtr = copy_envp((char**) auxvPtr);
+
+#ifdef StackBuild
+    cout << "Envp: " << envpPtr << "\n";
+#endif
 }
 
 void load_and_execute(string filepath, int argc, char* argv[]){

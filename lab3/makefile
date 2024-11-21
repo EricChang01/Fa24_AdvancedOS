@@ -1,6 +1,6 @@
 # Variables
 CXX = g++                 
-CXXFLAGS = -std=c++11  -static-libgcc # Compilation flags
+CXXFLAGS = -std=c++11  # Compilation flags
 TARGET_APAGER = apager  # Target program to test, default is 'default_program'
 TARGET_PROG1 = prog1
 SRC_APAGER = apager.cpp       # C++ source file (you can add more .cpp files here)
