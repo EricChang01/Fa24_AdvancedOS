@@ -68,7 +68,7 @@ uint64_t* copy_args (char** argvPtr, int argc, char* argv[]) {
     return argcPtr;
 }
 
-Elf64_auxv_t* copy_auxv(Elf64_auxv_t* auxvBeg, Elf64_auxv_t* auxvPtr, char* execFn){
+Elf64_auxv_t* copy_auxv(Elf64_auxv_t* auxvBeg, Elf64_auxv_t* auxvPtr, char* execFn, Elf64_Ehdr elf_header, Elf64_Addr intp_base_address, Elf64_Phdr* phdrs){
     int count = 0;
     Elf64_auxv_t* curr = auxvBeg;
     while(curr -> a_type != AT_NULL){
@@ -76,35 +76,31 @@ Elf64_auxv_t* copy_auxv(Elf64_auxv_t* auxvBeg, Elf64_auxv_t* auxvPtr, char* exec
         curr++;
     }
     count++;
-    // cout << "auxv count: " << count << "\n";
-    // cout << "Bef move: " << auxvPtr << "\n";
     auxvPtr -= count;
-    // cout << "Aft move: " << auxvPtr << "\n";
     memcpy(auxvPtr, auxvBeg, count * sizeof(Elf64_auxv_t));
     Elf64_auxv_t* replace = auxvPtr;
     while(replace -> a_type != AT_NULL){
         switch(replace -> a_type){
             case AT_PHDR:
-                cout << "Program headers for program: " << hex << curr -> a_un.a_val << "\n";
+                // check here, address of the program header table in memory
+                replace -> a_un.a_val = (uint64_t) phdrs;
                 break;
             case AT_BASE:
-                cout << "Base address of interpreter " << hex << curr -> a_un.a_val << "\n";;
+                replace -> a_un.a_val = (uint64_t) intp_base_address;
                 break;
             case AT_ENTRY:
-                cout << "Entry point of program " << hex << curr -> a_un.a_val << "\n";
+                replace -> a_un.a_val = elf_header.e_entry;
                 break;
             case AT_RANDOM:
-                cout << "AT_RANDOM\n";
+                cout << "AT_RANDOM " << replace -> a_un.a_val << "\n";
                 break;
             case AT_EXECFN:
-                // strcpy(replace -> a_un.a_val, execFn);
-                printf("AT_EXECFN, new string: %ld\n", replace -> a_un.a_val);
+                strcpy((char*)replace -> a_un.a_val, execFn);
+                replace -> a_un.a_val = (uint64_t)replace -> a_un.a_val;
                 break;
-            
         }
         replace++;
     }
-    // cout << "Aft copy: " << auxvPtr << "\n";
     return auxvPtr;
 
 }
@@ -120,7 +116,7 @@ char** copy_envp(char** envpPtr) {
     return envpPtr;
 } 
 
-void build_stack(int argc, char* argv[]){
+void build_stack(int argc, char* argv[], Elf64_Ehdr elf_header, Elf64_Addr intp_base_address, Elf64_Phdr* phdrs){
     // allocate stack
     size_t size = 8 * 1024 * 1024;
     void* stack = malloc(size);
@@ -147,7 +143,7 @@ stack = (void*) (reinterpret_cast<unsigned char*>(stack) + size);
     }
     env++; // start of auxv
 
-    Elf64_auxv_t* auxvPtr = copy_auxv((Elf64_auxv_t*)env, (Elf64_auxv_t*)stack, argv[1]);
+    Elf64_auxv_t* auxvPtr = copy_auxv((Elf64_auxv_t*)env, (Elf64_auxv_t*)stack, argv[1], elf_header, intp_base_address, phdrs);
 
 #ifdef StackBuild
     cout << "Auxv: " << auxvPtr << "\n";
@@ -168,6 +164,23 @@ stack = (void*) (reinterpret_cast<unsigned char*>(stack) + size);
     stack_check(argcPtr, argc - 1, ++argv);
 }
 
+/** ELF header
+    unsigned char e_ident[16];  // ELF identification
+    uint16_t e_type;             // Type of the file (e.g., executable)
+    uint16_t e_machine;          // Architecture
+    uint32_t e_version;          // ELF version
+    uint64_t e_entry;            // Entry point address
+    uint64_t e_phoff;            // Program header table offset
+    uint64_t e_shoff;            // Section header table offset
+    uint32_t e_flags;            // Processor-specific flags
+    uint16_t e_ehsize;           // ELF header size
+    uint16_t e_phentsize;        // Size of program header entry
+    uint16_t e_phnum;            // Number of program header entries
+    uint16_t e_shentsize;        // Size of section header entry
+    uint16_t e_shnum;            // Number of section header entries
+    uint16_t e_shstrndx;         // Section name string table index
+*/
+
 void load_and_execute(string filepath, int argc, char* argv[]){
     ifstream binary(filepath, std::ios::binary);
     if (!binary){
@@ -183,19 +196,27 @@ void load_and_execute(string filepath, int argc, char* argv[]){
     }
 
     binary.seekg(elf_header.e_phoff, std::ios::beg);
-    vector<Elf64_Phdr> phdrs(elf_header.e_phnum); // program headers
+    Elf64_Phdr* phdrs = (Elf64_Phdr*)malloc(elf_header.e_phnum * sizeof(Elf64_Phdr));
+
+    cout << "Program header address: " << phdrs << "\n";
+
+    // vector<Elf64_Phdr> phdrs(elf_header.e_phnum); // program headers
     for(int i=0; i<elf_header.e_phnum; i++)
         binary.read(reinterpret_cast<char*>(&phdrs[i]), sizeof(Elf64_Phdr));
 
     // Allocate memory for the program
     void* entry_point = nullptr;
-    for (const auto& ph : phdrs) {
+    Elf64_Addr intp_base_address; // base address of the intepreter
+    // Elf64_Addr phdr_address = phdrs;
+    // cout << "Program header address: " << phdr_address << "\n";
+    for (int i=0; i<elf_header.e_phnum; i++) {
+        Elf64_Phdr ph = phdrs[i];
         if (ph.p_type == PT_LOAD) { // loadable segment
-            std::cout << "Type: " << ph.p_type << ", Offset: 0x" 
-                << std::hex << ph.p_offset << ", VirtAddr: 0x" 
-                << ph.p_vaddr << ", FileSize: 0x" 
-                << ph.p_filesz << ", MemSize: 0x" 
-                << ph.p_memsz << "\n";
+            // std::cout << "Type: " << ph.p_type << ", Offset: 0x" 
+            //     << std::hex << ph.p_offset << ", VirtAddr: 0x" 
+            //     << ph.p_vaddr << ", FileSize: 0x" 
+            //     << ph.p_filesz << ", MemSize: 0x" 
+            //     << ph.p_memsz << "\n";
             void* segment = mmap((void*)(ph.p_vaddr), 
                                 ph.p_memsz,
                                 PROT_READ | PROT_WRITE | PROT_EXEC,
@@ -219,9 +240,12 @@ void load_and_execute(string filepath, int argc, char* argv[]){
             if (!entry_point) {
                 entry_point = (void*)(elf_header.e_entry);
             }
+        } else if (ph.p_type == PT_INTERP){
+            intp_base_address = ph.p_vaddr;
+            cout << "Interpreter base address " << hex << intp_base_address << "\n";
         }
     }
-    build_stack(argc, argv);
+    build_stack(argc, argv, elf_header, intp_base_address, phdrs);
 
 }
 
