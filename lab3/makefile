@@ -1,8 +1,6 @@
 # Variables
 CXX = g++                 
-CXXFLAGS = -std=c++11 -O2   # Compilation flags
-LD = ld
-# LDFLAGS = -L/usr/lib/x86_64-linux-gnu
+CXXFLAGS = -std=c++11  -static-libgcc # Compilation flags
 TARGET_APAGER = apager  # Target program to test, default is 'default_program'
 TARGET_PROG1 = prog1
 SRC_APAGER = apager.cpp       # C++ source file (you can add more .cpp files here)
@@ -10,17 +8,15 @@ SRC_PROG1 = prog1.cpp
 LD_APAGER = apager.ld
 LD_PROG1 = prog1.ld
 
-# Define the C runtime files to include manually (if needed)
-# CRT_FILES = /usr/lib/x86_64-linux-gnu/crt1.o /usr/lib/x86_64-linux-gnu/crti.o /usr/lib/x86_64-linux-gnu/crtn.o
+DEBUG = -D StackBuild
 
-# Default target
 all: $(TARGET_APAGER) $(TARGET_PROG1)
 
 $(TARGET_APAGER): $(SRC_APAGER) $(LD_APAGER)
-	$(CXX) $(CXXFLAGS) -o $(TARGET_APAGER) $(SRC_APAGER) -T $(LD_APAGER)
+	$(CXX) $(CXXFLAGS) -o $(TARGET_APAGER) $(SRC_APAGER) -T $(LD_APAGER) $(DEBUG)
 
 $(TARGET_PROG1): $(SRC_PROG1) $(LD_PROG1)
-	$(CXX) $(CXXFLAGS) -o $(TARGET_PROG1) $(SRC_PROG1) -T $(LD_PROG1)
+	$(CXX) $(CXXFLAGS) -o $(TARGET_PROG1) $(SRC_PROG1)  -T $(LD_PROG1)
 
 # Clean up generated files
 clean:

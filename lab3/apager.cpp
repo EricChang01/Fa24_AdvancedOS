@@ -5,9 +5,81 @@
 #include <elf.h>
 #include <vector>
 #include <sys/mman.h>
+#include "util.hpp"
 using namespace std;
 
-void load_and_execute(string filepath){
+char** copy_args (void* stack, int argc, char* argv[]) {
+    int* argcPtr = (int*)stack;
+
+#ifdef StackBuild
+cout << "addr: " << argcPtr << "\n";
+#endif
+    *argcPtr = argc - 1;
+    argcPtr++;
+
+#ifdef StackBuild
+    cout << "argc = " << *argcPtr << "\n";
+    cout << "addr: " << argcPtr << "\n";
+#endif
+
+    char** argvPtr = (char**)(argcPtr);  // Move the pointer past the 'argc' value
+    for (int i = 1; i < argc; ++i) {
+        memcpy(argvPtr, argv[i], sizeof(char*));
+        argvPtr++;
+#ifdef StackBuild
+        cout << "addr: " << argvPtr << "\n";
+#endif
+    }
+    return argvPtr;
+}
+
+Elf64_auxv_t* copy_auxv(Elf64_auxv_t *auxvPtr) {
+    int fd = open("/proc/self/auxv", O_RDONLY);
+    if (fd == -1) {
+        perror("open");
+        exit(EXIT_FAILURE);
+    }
+
+    Elf64_auxv_t auxv;
+    int num_auxv = 0;
+
+    // Read the auxiliary vector entries one at a time
+    while (read(fd, &auxv, sizeof(auxv)) == sizeof(auxv)) {
+        // Copy the auxv to the destination pointer (auxvPtr + num_auxv)
+        memcpy(auxvPtr, &auxv, sizeof(Elf64_auxv_t));
+        num_auxv++;
+        auxvPtr++;
+
+        // Stop reading when encountering the AT_NULL entry
+        if (auxv.a_type == AT_NULL) {
+            break;
+        }
+
+        // Print out the type and value for demonstration purposes
+        // printf("Type: %lu, Value: %lx\n", auxv.a_type, auxv.a_un.a_val);
+    }
+#ifdef StackBuild
+    cout << "addr: " << auxvPtr << "\n";
+#endif
+    cout << "num auxv: " << num_auxv << "\n";
+    return auxvPtr;
+}
+
+void build_stack(int argc, char* argv[]){
+    // allocate stack
+    size_t size = 8 * 1024 * 1024;
+    void* stack = malloc(size);
+
+    if (stack == nullptr) {
+        fprintf(stderr, "stack allocation fails\n");
+        return ;
+    }
+
+    char** argvPtr = copy_args(stack, argc, argv);
+    Elf64_auxv_t* auxvPtr = copy_auxv((Elf64_auxv_t*)(argvPtr));
+}
+
+void load_and_execute(string filepath, int argc, char* argv[]){
     ifstream binary(filepath, std::ios::binary);
     if (!binary){
         fprintf(stderr, "Failed to open binary\n");
@@ -23,10 +95,8 @@ void load_and_execute(string filepath){
 
     binary.seekg(elf_header.e_phoff, std::ios::beg);
     vector<Elf64_Phdr> phdrs(elf_header.e_phnum); // program headers
-    binary.read((char*)(phdrs.data()), elf_header.e_phnum * sizeof(Elf64_Phdr));
-
-    // for (auto& phdr: phdrs)
-    //     cout << phdr.p_type << "\n";
+    for(int i=0; i<elf_header.e_phnum; i++)
+        binary.read(reinterpret_cast<char*>(&phdrs[i]), sizeof(Elf64_Phdr));
 
     // Allocate memory for the program
     void* entry_point = nullptr;
@@ -57,22 +127,11 @@ void load_and_execute(string filepath){
             }
         }
     }
-    cout << "entry point = " << entry_point << "\n";
-
-    // Transfer control to the loaded program
-    using EntryPoint = void(*)();
-    EntryPoint execute = (EntryPoint)(entry_point);
-    execute();
+    build_stack(argc, argv);
 
 }
 
-int main(int argc, char* argv[]){
-    if(argc != 2){
-        fprintf(stderr, "Incorrect arguments.\n");
-        return 0;
-    }
-    
+int main(int argc, char* argv[]){   
     string filepath = argv[1];
-
-    load_and_execute(filepath);
+    load_and_execute(filepath, argc, argv);
 }
