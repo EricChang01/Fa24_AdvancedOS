@@ -5,7 +5,6 @@
 #include <elf.h>
 #include <vector>
 #include <sys/mman.h>
-#include "util_func.hpp"
 using namespace std;
 
 #include <stdlib.h>
@@ -57,7 +56,7 @@ uint64_t* copy_args (char** argvPtr, int argc, char* argv[]) {
     cout << "Before argv: " << argvPtr << "\n";
     argvPtr -= (argc - 1);
     argv++;
-    memcpy(argvPtr, argv, (argc - 1) * sizeof(char*));
+    memcpy(argvPtr, argv, (argc) * sizeof(char*));
 
     cout << "After argv: " << argvPtr << "\n";
 
