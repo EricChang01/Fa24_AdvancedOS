@@ -165,16 +165,29 @@ stack = (void*) (reinterpret_cast<unsigned char*>(stack) + size);
     return argcPtr;
 }
 
-void tranfer_control(uint64_t* stack, Elf64_Ehdr elf_header){
+void transfer_control(uint64_t* stack, Elf64_Ehdr elf_header){
     cout << "entry point " << elf_header.e_entry << "\n";
-    __asm__ volatile(
+    __asm__ volatile (
         "movq %0, %%rsp\n"           // Set stack pointer
-        "xor %%rbp, %%rbp\n"         // Clear base pointer (optional)
-        "jmp *%1\n"                  // Jump to entry point
+        "xor %%rax, %%rax\n"         // Clear RAX
+        "xor %%rbx, %%rbx\n"         // Clear RBX
+        "xor %%rcx, %%rcx\n"         // Clear RCX
+        "xor %%rdx, %%rdx\n"         // Clear RDX
+        "xor %%rsi, %%rsi\n"         // Clear RSI
+        "xor %%rdi, %%rdi\n"         // Clear RDI
+        "xor %%r8, %%r8\n"           // Clear R8
+        "xor %%r9, %%r9\n"           // Clear R9
+        "xor %%r10, %%r10\n"         // Clear R10
+        "xor %%r11, %%r11\n"         // Clear R11
+        "xor %%r12, %%r12\n"         // Clear R12
+        "xor %%r13, %%r13\n"         // Clear R13
+        "xor %%r14, %%r14\n"         // Clear R14
+        "xor %%r15, %%r15\n"         // Clear R15
+        "jmp *%1\n"                    // Jump to entry point
         :
-        : "r"(stack), "r"(elf_header.e_entry) // Inputs: new stack and entry point
-        : "memory"                   // Clobbered: memory
+        : "r"(stack), "r"(reinterpret_cast<void*>(elf_header.e_entry)) // Inputs: stack pointer and entry point
     );
+
 }
 
 /** ELF header
@@ -221,22 +234,14 @@ void load(string filepath, int argc, char* argv[]){
         Elf64_Phdr ph = phdrs[i];
 
         if (ph.p_type == PT_LOAD) { // loadable segment
-            std::cout << "Type: " << ph.p_type << ", Offset: 0x" 
-                << std::hex << ph.p_offset << ", VirtAddr: 0x" 
-                << ph.p_vaddr << ", FileSize: 0x" 
-                << ph.p_filesz << ", MemSize: 0x" 
-                << ph.p_memsz << "\n";
             int section_type = 0;
             if(ph.p_filesz < ph.p_memsz){
-                cout << "--- BSS section ---\n";
                 section_type = 2; // bss
             } else if (ph.p_filesz == ph.p_memsz){
                 if((ph.p_flags & (PF_X | PF_R)) == (PF_X | PF_R)){
                     section_type = 0; // text
-                    cout << "--- Text section --- \n";
                 } else {
                     section_type = 1; // data
-                    cout << "--- Data section --- \n";
                 }
             }
 
@@ -262,8 +267,11 @@ void load(string filepath, int argc, char* argv[]){
                 break;
                 case 2: // bss
                 cout << "virtual start point of bss: " << hex << ph.p_vaddr << "\n";
+                cout << "new start address: " << hex << (ph.p_vaddr & 0xFFFFF000) << "\n";
+                uint64_t diff =  (uint64_t)ph.p_vaddr - (uint64_t)(ph.p_vaddr & 0xFFFFF000);
+                cout << "address diff = " << diff << "\n";
                 segment = mmap((void*)(ph.p_vaddr), 
-                            ph.p_memsz,
+                            ph.p_memsz + diff,
                             PROT_READ | PROT_WRITE,
                             MAP_PRIVATE | MAP_ANONYMOUS,
                             -1, 0);
@@ -288,11 +296,11 @@ void load(string filepath, int argc, char* argv[]){
 
         } else if (ph.p_type == PT_INTERP){
             intp_base_address = ph.p_vaddr;
-            cout << "Interpreter base address " << hex << intp_base_address << "\n";
+            // cout << "Interpreter base address " << hex << intp_base_address << "\n";
         }
     }
     uint64_t* stack = build_stack(argc, argv, elf_header, intp_base_address, phdrs);
-    tranfer_control(stack, elf_header);
+    transfer_control(stack, elf_header);
 }
 
 int main(int argc, char* argv[]){   
