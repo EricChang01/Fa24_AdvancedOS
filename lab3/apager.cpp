@@ -26,8 +26,6 @@ void stack_check(void* top_of_stack, uint64_t argc, char** argv) {
 	printf("argc: %lu\n", actual_argc);
 	assert(actual_argc == argc);
 
-    cout << "addr after argc: " << stack << "\n";
-
 	for (int i = 0; i < argc; i++) {
 		char* argp = (char*)*(stack++);
         // printf("argp = %s, argv[i] = %s\n", argp, argv[i]);
@@ -53,12 +51,9 @@ void stack_check(void* top_of_stack, uint64_t argc, char** argv) {
 }
 
 uint64_t* copy_args (char** argvPtr, int argc, char* argv[]) {
-    cout << "Before argv: " << argvPtr << "\n";
     argvPtr -= (argc - 1);
     argv++;
     memcpy(argvPtr, argv, (argc) * sizeof(char*));
-
-    cout << "After argv: " << argvPtr << "\n";
 
     uint64_t* argcPtr = (uint64_t*)argvPtr;
 
@@ -68,38 +63,36 @@ uint64_t* copy_args (char** argvPtr, int argc, char* argv[]) {
     return argcPtr;
 }
 
-Elf64_auxv_t* copy_auxv(Elf64_auxv_t* auxvBeg, Elf64_auxv_t* auxvPtr, char* execFn, Elf64_Ehdr elf_header, Elf64_Addr intp_base_address, Elf64_Phdr* phdrs){
+Elf64_auxv_t* copy_auxv(Elf64_auxv_t* auxvBeg, Elf64_auxv_t* auxvPtr, char* fileName, Elf64_Ehdr elf_header, Elf64_Phdr* phdrs){
     int count = 0;
     Elf64_auxv_t* curr = auxvBeg;
     while(curr -> a_type != AT_NULL){
         count++;
         curr++;
     }
-    count++;
     auxvPtr -= count;
-    memcpy(auxvPtr, auxvBeg, count * sizeof(Elf64_auxv_t));
-    Elf64_auxv_t* replace = auxvPtr;
-    while(replace -> a_type != AT_NULL){
-        switch(replace -> a_type){
+    memcpy(auxvPtr, auxvBeg, (count+1) * sizeof(Elf64_auxv_t));
+
+    Elf64_auxv_t* auxv = auxvPtr;
+    while (auxv -> a_type != AT_NULL) {
+        switch(auxv -> a_type){
             case AT_PHDR:
-                // check here, address of the program header table in memory
-                replace -> a_un.a_val = (uint64_t) phdrs;
+                auxv -> a_un.a_val = (uint64_t) phdrs;
                 break;
             case AT_BASE:
-                replace -> a_un.a_val = (uint64_t) intp_base_address;
+                auxv -> a_un.a_val = 0;
                 break;
             case AT_ENTRY:
-                replace -> a_un.a_val = elf_header.e_entry;
+                auxv -> a_un.a_val = elf_header.e_entry;
                 break;
-            case AT_RANDOM:
-                cout << "AT_RANDOM " << replace -> a_un.a_val << "\n";
+            case AT_PHNUM:
+                auxv -> a_un.a_val = elf_header.e_phnum;
                 break;
             case AT_EXECFN:
-                strcpy((char*)replace -> a_un.a_val, execFn);
-                replace -> a_un.a_val = (uint64_t)replace -> a_un.a_val;
+                auxv -> a_un.a_val = (uint64_t) fileName;
                 break;
         }
-        replace++;
+        auxv++;
     }
     return auxvPtr;
 
@@ -116,7 +109,7 @@ char** copy_envp(char** envpPtr) {
     return envpPtr;
 } 
 
-uint64_t* build_stack(int argc, char* argv[], Elf64_Ehdr elf_header, Elf64_Addr intp_base_address, Elf64_Phdr* phdrs){
+uint64_t* build_stack(int argc, char* argv[], Elf64_Ehdr elf_header, Elf64_Phdr* phdrs){
     // allocate stack
     size_t size = 8 * 1024 * 1024;
     void* stack = malloc(size);
@@ -143,7 +136,7 @@ stack = (void*) (reinterpret_cast<unsigned char*>(stack) + size);
     }
     env++; // start of auxv
 
-    Elf64_auxv_t* auxvPtr = copy_auxv((Elf64_auxv_t*)env, (Elf64_auxv_t*)stack, argv[1], elf_header, intp_base_address, phdrs);
+    Elf64_auxv_t* auxvPtr = copy_auxv((Elf64_auxv_t*)env, (Elf64_auxv_t*)stack, argv[1], elf_header, phdrs);
 
 #ifdef StackBuild
     cout << "Auxv: " << auxvPtr << "\n";
@@ -165,27 +158,33 @@ stack = (void*) (reinterpret_cast<unsigned char*>(stack) + size);
     return argcPtr;
 }
 
-void transfer_control(uint64_t* stack, Elf64_Ehdr elf_header){
+void transfer_control(void* stack, Elf64_Ehdr elf_header){
     cout << "entry point " << elf_header.e_entry << "\n";
+    cout << "stack " << stack << "\n";
     __asm__ volatile (
-        "movq %0, %%rsp\n"           // Set stack pointer
-        "xor %%rax, %%rax\n"         // Clear RAX
-        "xor %%rbx, %%rbx\n"         // Clear RBX
-        "xor %%rcx, %%rcx\n"         // Clear RCX
-        "xor %%rdx, %%rdx\n"         // Clear RDX
-        "xor %%rsi, %%rsi\n"         // Clear RSI
-        "xor %%rdi, %%rdi\n"         // Clear RDI
-        "xor %%r8, %%r8\n"           // Clear R8
-        "xor %%r9, %%r9\n"           // Clear R9
-        "xor %%r10, %%r10\n"         // Clear R10
-        "xor %%r11, %%r11\n"         // Clear R11
-        "xor %%r12, %%r12\n"         // Clear R12
-        "xor %%r13, %%r13\n"         // Clear R13
-        "xor %%r14, %%r14\n"         // Clear R14
-        "xor %%r15, %%r15\n"         // Clear R15
-        "jmp *%1\n"                    // Jump to entry point
+        "mov %0, %%rsp\n\t"           // Set stack pointer
+
+        "push %1\n\t"
+
+        "xor %%rax, %%rax\n\t"         // Clear RAX
+        "xor %%rbx, %%rbx\n\t"         // Clear RBX
+        "xor %%rcx, %%rcx\n\t"         // Clear RCX
+        "xor %%rdx, %%rdx\n\t"         // Clear RDX
+        "xor %%rsi, %%rsi\n\t"         // Clear RSI
+        "xor %%rdi, %%rdi\n\t"         // Clear RDI
+        "xor %%r8, %%r8\n\t"           // Clear R8
+        "xor %%r9, %%r9\n\t"           // Clear R9
+        "xor %%r10, %%r10\n\t"         // Clear R10
+        "xor %%r11, %%r11\n\t"         // Clear R11
+        "xor %%r12, %%r12\n\t"         // Clear R12
+        "xor %%r13, %%r13\n\t"         // Clear R13
+        "xor %%r14, %%r14\n\t"         // Clear R14
+        "xor %%r15, %%r15\n\t"         // Clear R15
+        
+        "ret\n\t"                    // Jump to entry point
         :
-        : "r"(stack), "r"(reinterpret_cast<void*>(elf_header.e_entry)) // Inputs: stack pointer and entry point
+        : "r"((void*)stack), "r"(reinterpret_cast<void*>(elf_header.e_entry)) // Inputs: stack pointer and entry point
+        : "memory"
     );
 
 }
@@ -207,103 +206,87 @@ void transfer_control(uint64_t* stack, Elf64_Ehdr elf_header){
     uint16_t e_shstrndx;         // Section name string table index
 */
 
-void load(string filepath, int argc, char* argv[]){
-    ifstream binary(filepath, std::ios::binary);
-    if (!binary){
-        fprintf(stderr, "Failed to open binary\n");
-        return ;
-    }
-
+Elf64_Ehdr read_elf(ifstream& binary) {
     Elf64_Ehdr elf_header;
-    binary.read((char*)(&elf_header), sizeof(elf_header));
-    if (strncmp((const char*)(elf_header.e_ident), ELFMAG, SELFMAG) != 0) {
-        fprintf(stderr, "Invalid ELF file\n");
-        return ;
-    }
+    binary.read(reinterpret_cast<char *>(&elf_header), sizeof(elf_header));
+    return elf_header;
+}
 
-    binary.seekg(elf_header.e_phoff, std::ios::beg);
+Elf64_Phdr* read_program_headers(ifstream& binary, Elf64_Ehdr& elf_header) {
     Elf64_Phdr* phdrs = (Elf64_Phdr*)malloc(elf_header.e_phnum * sizeof(Elf64_Phdr));
+    binary.seekg(elf_header.e_phoff, std::ios::beg);
     for(int i=0; i<elf_header.e_phnum; i++)
         binary.read(reinterpret_cast<char*>(&phdrs[i]), sizeof(Elf64_Phdr));
 
-    // Allocate memory for the program
-    void* entry_point = nullptr;
-    Elf64_Addr intp_base_address; // base address of the intepreter
-
-    for (int i=0; i<elf_header.e_phnum; i++) {
-        Elf64_Phdr ph = phdrs[i];
-
-        if (ph.p_type == PT_LOAD) { // loadable segment
-            int section_type = 0;
-            if(ph.p_filesz < ph.p_memsz){
-                section_type = 2; // bss
-            } else if (ph.p_filesz == ph.p_memsz){
-                if((ph.p_flags & (PF_X | PF_R)) == (PF_X | PF_R)){
-                    section_type = 0; // text
-                } else {
-                    section_type = 1; // data
-                }
-            }
-
-            void* segment;
-            switch(section_type){
-                case 0: // text
-                cout << "virtual start point of text: " << ph.p_vaddr << "\n";
-                segment = mmap((void*)(ph.p_vaddr), 
-                            ph.p_memsz,
-                            PROT_READ | PROT_WRITE | PROT_EXEC,
-                            MAP_PRIVATE | MAP_ANONYMOUS,
-                            -1, 0);
-                cout << "address actually allocated: " << hex << segment << "\n";
-                break;
-                case 1: // data
-                cout << "virtual start point of data: " << hex << ph.p_vaddr << "\n";
-                segment = mmap((void*)(ph.p_vaddr), 
-                            ph.p_memsz,
-                            PROT_READ | PROT_WRITE,
-                            MAP_PRIVATE | MAP_ANONYMOUS,
-                            -1, 0);
-                cout << "address actually allocated: " << hex << segment << "\n";
-                break;
-                case 2: // bss
-                cout << "virtual start point of bss: " << hex << ph.p_vaddr << "\n";
-                cout << "new start address: " << hex << (ph.p_vaddr & 0xFFFFF000) << "\n";
-                uint64_t diff =  (uint64_t)ph.p_vaddr - (uint64_t)(ph.p_vaddr & 0xFFFFF000);
-                cout << "address diff = " << diff << "\n";
-                segment = mmap((void*)(ph.p_vaddr), 
-                            ph.p_memsz + diff,
-                            PROT_READ | PROT_WRITE,
-                            MAP_PRIVATE | MAP_ANONYMOUS,
-                            -1, 0);
-                cout << "address actually allocated: " << hex << segment << "\n";
-                break;
-
-            }      
-
-            if (segment == MAP_FAILED) {
-                perror("mmap failed");
-                return ;
-            }
-
-            // Load segment data
-            binary.seekg(ph.p_offset, std::ios::beg);
-            binary.read((char*)(segment), ph.p_filesz);
-
-            // Zero out the remaining part if needed
-            if (ph.p_filesz < ph.p_memsz) {
-                memset((char*)(segment) + ph.p_filesz, 0, ph.p_memsz - ph.p_filesz);
-            }
-
-        } else if (ph.p_type == PT_INTERP){
-            intp_base_address = ph.p_vaddr;
-            // cout << "Interpreter base address " << hex << intp_base_address << "\n";
-        }
-    }
-    uint64_t* stack = build_stack(argc, argv, elf_header, intp_base_address, phdrs);
-    transfer_control(stack, elf_header);
+    return phdrs;
 }
 
 int main(int argc, char* argv[]){   
     string filepath = argv[1];
-    load(filepath, argc, argv);
+    ifstream binary(filepath, std::ios::binary);
+    if (!binary){
+        fprintf(stderr, "Failed to open binary\n");
+        return 0;
+    }
+    Elf64_Ehdr elf_header = read_elf(binary);
+    Elf64_Phdr* phdrs = read_program_headers(binary, elf_header);
+
+    // Allocate memory for the program
+    void* text_segment, *bss_segment, *ro_data_segment, *rw_data_segment;
+    for (int i=0; i<elf_header.e_phnum; i++) {
+        Elf64_Phdr ph = phdrs[i];
+
+        if(ph.p_type != PT_LOAD)
+            continue;
+
+        if (ph.p_flags & PF_X) { // text section
+            cout << "TEXT v_addr: " << ph.p_vaddr << "\n";
+            text_segment = mmap((void*)(ph.p_vaddr), 
+                        ph.p_memsz,
+                        PROT_READ | PROT_WRITE | PROT_EXEC,
+                        MAP_PRIVATE | MAP_ANONYMOUS,
+                        -1, 0);
+
+            binary.seekg(ph.p_offset, std::ios::beg);
+            binary.read((char*)(text_segment), ph.p_filesz);
+            cout << "TEXT mmap: " << hex << text_segment << "\n";
+        } else if (ph.p_flags & (PF_X)) {
+            if (ph.p_filesz < ph.p_memsz) { // bss section
+                cout << "BSS v_addr: " << hex << ph.p_vaddr << "\n";
+                cout << "BSS new: " << hex << (ph.p_vaddr & 0xFFFFF000) << "\n";
+                uint64_t diff =  (uint64_t)ph.p_vaddr - (uint64_t)(ph.p_vaddr & 0xFFFFF000);
+                bss_segment = mmap((void*)(ph.p_vaddr), 
+                            ph.p_memsz + diff,
+                            PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS,
+                            -1, 0);
+                binary.seekg(ph.p_offset, std::ios::beg);
+                binary.read((char*)(ph.p_vaddr), ph.p_filesz);
+                memset((char*)(ph.p_vaddr) + ph.p_filesz, 0, ph.p_memsz - ph.p_filesz);
+                cout << "BSS mmap: " << hex << bss_segment << "\n";
+            } else { // data section
+                cout << "DATA v_addr: " << hex << ph.p_vaddr << "\n";
+                rw_data_segment = mmap((void*)(ph.p_vaddr), 
+                            ph.p_memsz,
+                            PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS,
+                            -1, 0);
+                binary.seekg(ph.p_offset, std::ios::beg);
+                binary.read((char*)(rw_data_segment), ph.p_filesz);
+                cout << "DATA mmap: " << hex << rw_data_segment << "\n";
+            }
+        } else if (ph.p_flags & (PF_R)) {
+            cout << "DATA v_addr: " << hex << ph.p_vaddr << "\n";
+                ro_data_segment = mmap((void*)(ph.p_vaddr), 
+                            ph.p_memsz,
+                            PROT_READ | PROT_WRITE,
+                            MAP_PRIVATE | MAP_ANONYMOUS,
+                            -1, 0);
+                binary.seekg(ph.p_offset, std::ios::beg);
+                binary.read((char*)(ro_data_segment), ph.p_filesz);
+                cout << "DATA mmap: " << hex << ro_data_segment << "\n";
+        }   
+    }
+    uint64_t* stack = build_stack(argc, argv, elf_header, phdrs);
+    transfer_control((void*)(stack), elf_header);
 }
