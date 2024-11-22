@@ -13,12 +13,6 @@
 
 using namespace std;
 
-Elf64_Ehdr read_elf(ifstream& binary) {
-    Elf64_Ehdr elf_header;
-    binary.read(reinterpret_cast<char *>(&elf_header), sizeof(elf_header));
-    return elf_header;
-}
-
 void transfer_control(void* stack, void* entry_point) {
     cout << "entry point " << entry_point << "\n";
     cout << "stack " << stack << "\n";
@@ -49,21 +43,18 @@ void transfer_control(void* stack, void* entry_point) {
     );
 }
 
-
 extern char **environ;
 
 int main(int argc, char **argv) {
-    Elf64_auxv_t* auxv;
-
-    void* top_of_stack = (void*)(argv-1);
-
     string filepath = argv[1];
     ifstream binary(filepath, std::ios::binary);
 
     Pager pager(Pagers::APAGER);
 
     // Read ELF header
-    pager.elfhdr = read_elf(binary);
+    Elf64_Ehdr elf_header;
+    binary.read(reinterpret_cast<char *>(&elf_header), sizeof(elf_header));
+    pager.elfhdr = elf_header;
 
     // Validate ELF magic number
     if (memcmp(pager.elfhdr.e_ident, ELFMAG, SELFMAG) != 0) {
@@ -72,7 +63,7 @@ int main(int argc, char **argv) {
 
     pager.mmap_segments(binary);
 
-    auxv = pager.stack.find_auxv_entry(top_of_stack, argc, argv);
+    Elf64_auxv_t* auxv = pager.stack.find_auxv_entry((void*)(argv-1), argc, argv);
 
     pager.stack.build_stack(&argv[1], environ, auxv, pager);
 
