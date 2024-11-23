@@ -22,13 +22,17 @@ void Pager::mmap_segments(ifstream &binary)
             if (ph.p_flags & PF_X) { // text segment
                 this->text.mmap_segment_phdr(binary, &ph);
                 this->elfhdr.e_entry = (uint64_t)text.addr + (this->elfhdr.e_entry - ph.p_vaddr);
-            } else if (ph.p_flags & PF_W) {
+            } 
+
+            if (ph.p_flags & (PF_R | PF_W)) { // bss or data
                 if (ph.p_filesz < ph.p_memsz) { // bss segment
                     this->bss.mmap_segment_phdr(binary, &ph);
                 } else { // data segment
                     this->data.mmap_segment_phdr(binary, &ph);
                 }
-            } else if (ph.p_flags & PF_R) { // data segment
+            }
+
+            if (ph.p_flags & PF_R) { // rodata segment
                 this->rodata.mmap_segment_phdr(binary, &ph);
             }
         }

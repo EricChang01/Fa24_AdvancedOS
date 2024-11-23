@@ -39,6 +39,6 @@ $(TARGET_APAGER): $(OBJ_APAGER) $(OBJ_LOADER)
 
 # Clean up generated files
 clean:
-	rm -f $(TARGET_APAGER) $(OBJ_APAGER) $(TARGET_PROG1) $(OBJ_LOADER)
+	rm -f $(TARGET_APAGER) $(OBJ_APAGER) $(TARGET_PROG1) $(OBJ_LOADER) $(TARGET_PROG2)
 
 .PHONY: all clean run
