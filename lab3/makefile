@@ -6,7 +6,7 @@ TARGET_APAGER = apager
 TARGET_PROG1 = prog1
 TARGET_PROG2 = prog2
 
-LD_APAGER = loader.ld
+LD_PAGER = loader.ld
 LD_PROG = default.ld
 
 SRC_LOADER = segment.cpp pager.cpp stack.cpp
@@ -18,8 +18,6 @@ OBJ_APAGER = apager.o
 
 SRC_PROG1 = prog1.cpp
 SRC_PROG2 = prog2.cpp
-
-DEBUG = -D StackBuild
 
 all: $(TARGET_APAGER) $(TARGET_PROG1) $(TARGET_PROG2)
 
@@ -35,7 +33,7 @@ $(TARGET_PROG2): $(SRC_PROG2) $(LD_PROG)
 
 # Rule to compile the loader executable
 $(TARGET_APAGER): $(OBJ_APAGER) $(OBJ_LOADER)
-	$(CXX) $(CXXFLAGS) -static $(OBJ_LOADER) $(OBJ_APAGER) -o apager
+	$(CXX) $(CXXFLAGS) -static $(OBJ_LOADER) $(OBJ_APAGER) -o apager -T $(LD_PAGER)
 
 # Clean up generated files
 clean:
